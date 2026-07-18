@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import { Bot, InlineKeyboard } from "grammy";
-import { getDescricoes, addNovaOpcao, appendDespesa } from "./sheets.js";
+import { getDescricoes, addNovaOpcao, appendDespesa, appendReceita } from "./sheets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -111,6 +111,31 @@ app.post("/api/despesa", async (req, res) => {
   }
 });
 
+// Registra uma receita
+app.post("/api/receita", async (req, res) => {
+  try {
+    const { descricao, valor, data, status, observacao } = req.body;
+
+    if (!descricao || !valor || !data) {
+      return res.status(400).json({ erro: "Descrição, valor e data são obrigatórios." });
+    }
+
+    await appendReceita({
+      codigo: uuidv4(),
+      data,
+      descricao,
+      valor,
+      status: status || "Recebido",
+      observacao: observacao || "",
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Erro ao salvar receita:", err);
+    res.status(500).json({ erro: "Não foi possível salvar a receita." });
+  }
+});
+
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
 
 // ---------- Bot do Telegram ----------
@@ -123,10 +148,10 @@ bot.command("start", (ctx) => enviarMenu(ctx));
 bot.on("message:text", (ctx) => enviarMenu(ctx));
 
 async function enviarMenu(ctx) {
-  const teclado = new InlineKeyboard().webApp(
-    "💸 Registrar despesa",
-    `${PUBLIC_URL}/miniapp/despesa.html`
-  );
+  const teclado = new InlineKeyboard()
+    .webApp("💸 Registrar despesa", `${PUBLIC_URL}/miniapp/despesa.html`)
+    .row()
+    .webApp("💰 Registrar receita", `${PUBLIC_URL}/miniapp/receita.html`);
   await ctx.reply("O que você quer registrar?", { reply_markup: teclado });
 }
 

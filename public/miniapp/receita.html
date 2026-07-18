@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nova receita</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1c1c1e;
+    --muted: #6b6b6f;
+    --border: #e2e2e4;
+    --accent: #2f80ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  input, select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 15px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .linha-dupla { display: flex; gap: 8px; }
+  .linha-dupla > div { flex: 1; }
+  #btn-salvar {
+    width: 100%;
+    margin-top: 20px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+  }
+  #btn-salvar:disabled { opacity: 0.5; }
+  #mensagem { font-size: 13px; margin-top: 10px; text-align: center; }
+  #mensagem.erro { color: #d64545; }
+  #mensagem.sucesso { color: #2e9e5b; }
+</style>
+</head>
+<body>
+
+<h1>Nova receita</h1>
+
+<form id="form-receita">
+  <label for="descricao">Descrição</label>
+  <select id="descricao" required></select>
+  <input type="text" id="descricaoNovo" placeholder="Digite a nova descrição" style="display:none; margin-top:8px;" />
+
+  <label for="valor">Valor</label>
+  <input type="text" inputmode="numeric" id="valor" value="R$ 0,00" required />
+
+  <div class="linha-dupla">
+    <div>
+      <label for="data">Data</label>
+      <input type="date" id="data" required />
+    </div>
+    <div>
+      <label for="status">Status</label>
+      <select id="status">
+        <option value="Recebido">Recebido</option>
+        <option value="Pendente">Pendente</option>
+      </select>
+    </div>
+  </div>
+
+  <label for="observacao">Observação</label>
+  <input type="text" id="observacao" placeholder="Opcional" />
+
+  <button type="submit" id="btn-salvar">Salvar receita</button>
+  <p id="mensagem"></p>
+</form>
+
+<script>
+  const tg = window.Telegram?.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  const OPCAO_OUTRO = "Outro";
+
+  // Máscara de moeda: mantém só os dígitos digitados e formata como R$ 0,00
+  const campoValor = document.getElementById("valor");
+  function formatarMoeda(digitos) {
+    const centavos = parseInt(digitos || "0", 10);
+    return (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  }
+  function valorEmCentavos(texto) {
+    return parseInt((texto.match(/\d/g) || ["0"]).join(""), 10);
+  }
+  campoValor.addEventListener("input", () => {
+    const digitos = campoValor.value.replace(/\D/g, "");
+    campoValor.value = formatarMoeda(digitos);
+  });
+
+  // Pré-preenche a data de hoje como padrão
+  const hoje = new Date();
+  document.getElementById("data").value = hoje.toISOString().slice(0, 10);
+
+  function preencherSelect(select, lista, inputNovo, placeholder = null) {
+    select.innerHTML = "";
+
+    if (placeholder) {
+      const optPlaceholder = document.createElement("option");
+      optPlaceholder.value = "";
+      optPlaceholder.textContent = placeholder;
+      optPlaceholder.disabled = true;
+      optPlaceholder.selected = true;
+      optPlaceholder.hidden = true;
+      select.appendChild(optPlaceholder);
+    }
+
+    for (const item of lista) {
+      const opt = document.createElement("option");
+      opt.value = item;
+      opt.textContent = item;
+      select.appendChild(opt);
+    }
+    const optOutro = document.createElement("option");
+    optOutro.value = OPCAO_OUTRO;
+    optOutro.textContent = "Outro...";
+    select.appendChild(optOutro);
+
+    select.addEventListener("change", () => {
+      inputNovo.style.display = select.value === OPCAO_OUTRO ? "block" : "none";
+    });
+  }
+
+  async function carregarOpcoes() {
+    const resp = await fetch("/api/opcoes");
+    const dados = await resp.json();
+    preencherSelect(document.getElementById("descricao"), dados.receitas, document.getElementById("descricaoNovo"), "Selecione uma descrição");
+  }
+  carregarOpcoes();
+
+  async function resolverValorCampo(selectId, inputNovoId, campoDescricoes) {
+    const select = document.getElementById(selectId);
+    if (select.value !== OPCAO_OUTRO) return select.value;
+
+    const novoValor = document.getElementById(inputNovoId).value.trim();
+    if (!novoValor) throw new Error("Preencha a nova descrição.");
+
+    await fetch("/api/opcoes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ campo: campoDescricoes, valor: novoValor }),
+    });
+
+    return novoValor;
+  }
+
+  const form = document.getElementById("form-receita");
+  const btn = document.getElementById("btn-salvar");
+  const mensagem = document.getElementById("mensagem");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    mensagem.textContent = "";
+    mensagem.className = "";
+
+    try {
+      const descricao = await resolverValorCampo("descricao", "descricaoNovo", "receitas");
+
+      const payload = {
+        descricao,
+        valor: valorEmCentavos(campoValor.value) / 100,
+        data: document.getElementById("data").value,
+        status: document.getElementById("status").value,
+        observacao: document.getElementById("observacao").value,
+      };
+
+      const resp = await fetch("/api/receita", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) throw new Error("Falha ao salvar.");
+
+      mensagem.textContent = "Receita registrada na planilha ✓";
+      mensagem.className = "sucesso";
+
+      setTimeout(() => { if (tg) tg.close(); }, 1200);
+    } catch (err) {
+      mensagem.textContent = err.message || "Erro ao salvar a receita.";
+      mensagem.className = "erro";
+      btn.disabled = false;
+    }
+  });
+</script>
+
+</body>
+</html>

@@ -76,6 +76,27 @@ export async function addNovaOpcao(campo, valor) {
   });
 }
 
+// Adiciona uma nova linha na aba Receita
+// receita: { codigo, data, descricao, valor, status, observacao }
+export async function appendReceita(receita) {
+  const sheets = await getSheetsClient();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: "Receita!A:F",
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {
+      values: [[
+        receita.codigo,
+        receita.data,
+        receita.descricao,
+        receita.valor,
+        receita.status,
+        receita.observacao,
+      ]],
+    },
+  });
+}
 // Adiciona uma nova linha na aba Despesa
 // despesa: { codigo, dataRegistro, dataReferencia, descricao, formaPagamento, valor, status, observacao, doQue }
 export async function appendDespesa(despesa) {
