@@ -116,8 +116,16 @@
     campoValor.value = formatarMoeda(digitos);
   });
 
-  function preencherSelect(select, lista, inputNovo) {
+  function preencherSelect(select, lista, inputNovo, opcional = false) {
     select.innerHTML = "";
+
+    if (opcional) {
+      const optVazia = document.createElement("option");
+      optVazia.value = "";
+      optVazia.textContent = "Nenhuma";
+      select.appendChild(optVazia);
+    }
+
     for (const item of lista) {
       const opt = document.createElement("option");
       opt.value = item;
@@ -145,7 +153,7 @@
     const resp = await fetch("/api/opcoes");
     const dados = await resp.json();
     preencherSelect(document.getElementById("descricao"), dados.despesas, document.getElementById("descricaoNovo"));
-    preencherSelect(document.getElementById("doQue"), dados.doQue, document.getElementById("doQueNovo"));
+    preencherSelect(document.getElementById("doQue"), dados.doQue, document.getElementById("doQueNovo"), true);
     preencherSelect(document.getElementById("formaPagamento"), dados.pagamentos, document.getElementById("formaPagamentoNovo"));
   }
   carregarOpcoes();
