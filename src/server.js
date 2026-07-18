@@ -98,5 +98,13 @@ async function enviarMenu(ctx) {
   await ctx.reply("O que você quer registrar?", { reply_markup: teclado });
 }
 
+bot.catch((err) => {
+  console.error("Erro no bot:", err.message);
+});
+
+if (!PUBLIC_URL) {
+  console.warn("Aviso: PUBLIC_URL não está definida. O botão da mini app não vai funcionar até você configurá-la.");
+}
+
 bot.start();
 console.log("Bot iniciado (long polling).");
