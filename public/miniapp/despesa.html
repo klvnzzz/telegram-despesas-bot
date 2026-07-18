@@ -63,6 +63,25 @@
   <label for="valor">Valor</label>
   <input type="text" inputmode="numeric" id="valor" value="R$ 0,00" required />
 
+  <label>Data (mês de referência)</label>
+  <div class="linha-dupla">
+    <select id="mesReferencia">
+      <option value="1">Janeiro</option>
+      <option value="2">Fevereiro</option>
+      <option value="3">Março</option>
+      <option value="4">Abril</option>
+      <option value="5">Maio</option>
+      <option value="6">Junho</option>
+      <option value="7">Julho</option>
+      <option value="8">Agosto</option>
+      <option value="9">Setembro</option>
+      <option value="10">Outubro</option>
+      <option value="11">Novembro</option>
+      <option value="12">Dezembro</option>
+    </select>
+    <input type="number" id="anoReferencia" placeholder="Ano" />
+  </div>
+
   <label for="doQue">Do que?</label>
   <select id="doQue"></select>
   <input type="text" id="doQueNovo" placeholder="Digite a nova categoria" style="display:none; margin-top:8px;" />
@@ -115,6 +134,11 @@
     const digitos = campoValor.value.replace(/\D/g, "");
     campoValor.value = formatarMoeda(digitos);
   });
+
+  // Pré-seleciona o mês e ano atuais como padrão (o usuário pode trocar)
+  const hoje = new Date();
+  document.getElementById("mesReferencia").value = String(hoje.getMonth() + 1);
+  document.getElementById("anoReferencia").value = String(hoje.getFullYear());
 
   function preencherSelect(select, lista, inputNovo, opcional = false) {
     select.innerHTML = "";
@@ -200,6 +224,8 @@
         status: document.getElementById("status").value,
         observacao: document.getElementById("observacao").value,
         parcelas,
+        mesReferencia: document.getElementById("mesReferencia").value,
+        anoReferencia: document.getElementById("anoReferencia").value,
       };
 
       const resp = await fetch("/api/despesa", {

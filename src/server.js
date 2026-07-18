@@ -42,27 +42,59 @@ app.post("/api/opcoes", async (req, res) => {
   }
 });
 
+// Retorna a data de hoje já considerando o fuso horário de Brasília,
+// independente de em qual fuso o servidor estiver rodando (ex: Render usa UTC)
+function obterDataHojeBrasilia() {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const partes = formatter.formatToParts(new Date());
+  return {
+    ano: Number(partes.find((p) => p.type === "year").value),
+    mes: Number(partes.find((p) => p.type === "month").value), // 1-12
+    dia: Number(partes.find((p) => p.type === "day").value),
+  };
+}
+
+// Soma N meses a uma data (ano/mes/dia) e devolve no formato YYYY-MM-DD
+function formatarDataComIncrementoMeses({ ano, mes, dia }, incrementoMeses) {
+  const dataUtc = new Date(Date.UTC(ano, mes - 1 + incrementoMeses, dia));
+  return dataUtc.toISOString().slice(0, 10);
+}
+
 // Registra uma despesa (ou várias, se for parcelada)
 app.post("/api/despesa", async (req, res) => {
   try {
-    const { descricao, valor, doQue, formaPagamento, status, observacao, parcelas } = req.body;
+    const { descricao, valor, doQue, formaPagamento, status, observacao, parcelas, mesReferencia, anoReferencia } = req.body;
 
     if (!descricao || !valor) {
       return res.status(400).json({ erro: "Descrição e valor são obrigatórios." });
     }
+    if (!mesReferencia || !anoReferencia) {
+      return res.status(400).json({ erro: "Mês e ano de referência são obrigatórios." });
+    }
 
     const totalParcelas = Number(parcelas) > 1 ? Number(parcelas) : 1;
-    const hoje = new Date();
+
+    // Data de registro: sempre hoje, igual em todas as parcelas (é quando o lançamento foi feito)
+    const dataRegistro = formatarDataComIncrementoMeses(obterDataHojeBrasilia(), 0);
+
+    // Data de referência: mês/ano escolhido no formulário, sempre dia 1, avançando um mês por parcela
+    const baseReferencia = { ano: Number(anoReferencia), mes: Number(mesReferencia), dia: 1 };
 
     for (let i = 0; i < totalParcelas; i++) {
-      const dataParcela = new Date(hoje.getFullYear(), hoje.getMonth() + i, hoje.getDate());
+      const dataReferencia = formatarDataComIncrementoMeses(baseReferencia, i);
       const observacaoFinal = totalParcelas > 1
         ? `Parcela ${i + 1} de ${totalParcelas}${observacao ? " — " + observacao : ""}`
         : (observacao || "");
 
       await appendDespesa({
         codigo: uuidv4(),
-        dataRegistro: dataParcela.toISOString().slice(0, 10),
+        dataRegistro,
+        dataReferencia,
         descricao,
         formaPagamento,
         valor,

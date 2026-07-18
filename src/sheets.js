@@ -71,18 +71,19 @@ export async function addNovaOpcao(campo, valor) {
 }
 
 // Adiciona uma nova linha na aba Despesa
-// despesa: { codigo, dataRegistro, descricao, formaPagamento, valor, status, observacao, doQue }
+// despesa: { codigo, dataRegistro, dataReferencia, descricao, formaPagamento, valor, status, observacao, doQue }
 export async function appendDespesa(despesa) {
   const sheets = await getSheetsClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: "Despesa!A:H",
+    range: "Despesa!A:I",
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
     requestBody: {
       values: [[
         despesa.codigo,
         despesa.dataRegistro,
+        despesa.dataReferencia,
         despesa.descricao,
         despesa.formaPagamento,
         despesa.valor,
