@@ -57,7 +57,7 @@
 
 <form id="form-despesa">
   <label for="descricao">Descrição</label>
-  <select id="descricao"></select>
+  <select id="descricao" required></select>
   <input type="text" id="descricaoNovo" placeholder="Digite a nova descrição" style="display:none; margin-top:8px;" />
 
   <label for="valor">Valor</label>
@@ -140,10 +140,18 @@
   document.getElementById("mesReferencia").value = String(hoje.getMonth() + 1);
   document.getElementById("anoReferencia").value = String(hoje.getFullYear());
 
-  function preencherSelect(select, lista, inputNovo, opcional = false) {
+  function preencherSelect(select, lista, inputNovo, opcional = false, placeholder = null) {
     select.innerHTML = "";
 
-    if (opcional) {
+    if (placeholder) {
+      const optPlaceholder = document.createElement("option");
+      optPlaceholder.value = "";
+      optPlaceholder.textContent = placeholder;
+      optPlaceholder.disabled = true;
+      optPlaceholder.selected = true;
+      optPlaceholder.hidden = true;
+      select.appendChild(optPlaceholder);
+    } else if (opcional) {
       const optVazia = document.createElement("option");
       optVazia.value = "";
       optVazia.textContent = "Nenhuma";
@@ -176,7 +184,7 @@
   async function carregarOpcoes() {
     const resp = await fetch("/api/opcoes");
     const dados = await resp.json();
-    preencherSelect(document.getElementById("descricao"), dados.despesas, document.getElementById("descricaoNovo"));
+    preencherSelect(document.getElementById("descricao"), dados.despesas, document.getElementById("descricaoNovo"), false, "Selecione uma descrição");
     preencherSelect(document.getElementById("doQue"), dados.doQue, document.getElementById("doQueNovo"), true);
     preencherSelect(document.getElementById("formaPagamento"), dados.pagamentos, document.getElementById("formaPagamentoNovo"));
   }

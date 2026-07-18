@@ -43,6 +43,12 @@ export async function getDescricoes() {
     if (row[3]) resultado.doQue.push(row[3]);
   }
 
+  const comparar = (a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" });
+  resultado.despesas.sort(comparar);
+  resultado.receitas.sort(comparar);
+  resultado.pagamentos.sort(comparar);
+  resultado.doQue.sort(comparar);
+
   return resultado;
 }
 
