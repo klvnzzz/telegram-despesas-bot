@@ -114,18 +114,23 @@ app.post("/api/despesa", async (req, res) => {
 // Registra uma receita
 app.post("/api/receita", async (req, res) => {
   try {
-    const { descricao, valor, data, status, observacao } = req.body;
+    const { descricao, valor, mesReferencia, anoReferencia, status, observacao } = req.body;
 
-    if (!descricao || !valor || !data) {
-      return res.status(400).json({ erro: "Descrição, valor e data são obrigatórios." });
+    if (!descricao || !valor || !mesReferencia || !anoReferencia) {
+      return res.status(400).json({ erro: "Descrição, valor, mês e ano são obrigatórios." });
     }
+
+    const data = formatarDataComIncrementoMeses(
+      { ano: Number(anoReferencia), mes: Number(mesReferencia), dia: 1 },
+      0
+    );
 
     await appendReceita({
       codigo: uuidv4(),
       data,
       descricao,
       valor,
-      status: status || "Recebido",
+      status: status || "Pendente",
       observacao: observacao || "",
     });
 
