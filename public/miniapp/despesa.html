@@ -63,6 +63,10 @@
   <label for="valor">Valor</label>
   <input type="text" inputmode="numeric" id="valor" value="R$ 0,00" required />
 
+  <label for="formaPagamento">Forma de pagamento</label>
+  <select id="formaPagamento"></select>
+  <input type="text" id="formaPagamentoNovo" placeholder="Digite a nova forma de pagamento" style="display:none; margin-top:8px;" />
+
   <label>Data (mês de referência)</label>
   <div class="linha-dupla">
     <select id="mesReferencia">
@@ -82,14 +86,6 @@
     <input type="number" id="anoReferencia" placeholder="Ano" />
   </div>
 
-  <label for="doQue">Do que?</label>
-  <select id="doQue"></select>
-  <input type="text" id="doQueNovo" placeholder="Digite a nova categoria" style="display:none; margin-top:8px;" />
-
-  <label for="formaPagamento">Forma de pagamento</label>
-  <select id="formaPagamento"></select>
-  <input type="text" id="formaPagamentoNovo" placeholder="Digite a nova forma de pagamento" style="display:none; margin-top:8px;" />
-
   <div class="linha-dupla">
     <div>
       <label for="parcelado">Parcelado?</label>
@@ -107,6 +103,10 @@
       </select>
     </div>
   </div>
+
+  <label for="doQue">Do que? <span style="color:var(--muted); font-weight:400;">(assinatura, presente, parcelado...)</span></label>
+  <select id="doQue"></select>
+  <input type="text" id="doQueNovo" placeholder="Digite a nova categoria" style="display:none; margin-top:8px;" />
 
   <label for="observacao">Observação</label>
   <input type="text" id="observacao" placeholder="Opcional" />
