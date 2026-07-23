@@ -11,6 +11,7 @@ const COLUNAS_DESCRICOES = {
   doQue: "D",
   aplicacao: "E",
   instituicao: "F",
+  custodia: "G",
 };
 
 function getAuthClient() {
@@ -28,16 +29,16 @@ async function getSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
-// Lê as 6 colunas da aba Descrições e devolve as listas já limpas (sem células vazias)
+// Lê as 7 colunas da aba Descrições e devolve as listas já limpas (sem células vazias)
 export async function getDescricoes() {
   const sheets = await getSheetsClient();
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
-    range: "Descrições!A2:F500",
+    range: "Descrições!A2:G500",
   });
 
   const rows = data.values || [];
-  const resultado = { despesas: [], receitas: [], pagamentos: [], doQue: [], aplicacao: [], instituicao: [] };
+  const resultado = { despesas: [], receitas: [], pagamentos: [], doQue: [], aplicacao: [], instituicao: [], custodia: [] };
 
   for (const row of rows) {
     if (row[0]) resultado.despesas.push(row[0]);
@@ -46,6 +47,7 @@ export async function getDescricoes() {
     if (row[3]) resultado.doQue.push(row[3]);
     if (row[4]) resultado.aplicacao.push(row[4]);
     if (row[5]) resultado.instituicao.push(row[5]);
+    if (row[6]) resultado.custodia.push(row[6]);
   }
 
   const comparar = (a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" });
@@ -55,6 +57,7 @@ export async function getDescricoes() {
   resultado.doQue.sort(comparar);
   resultado.aplicacao.sort(comparar);
   resultado.instituicao.sort(comparar);
+  resultado.custodia.sort(comparar);
 
   return resultado;
 }
@@ -106,6 +109,27 @@ export async function upsertFgts({ data, valorAtualizado }) {
     range: "FGTS!A2:C2",
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [[codigo, data, valorAtualizado]] },
+  });
+}
+
+// Adiciona uma nova linha na aba Custódia
+// custodia: { codigo, data, instituicao, descricao, valor }
+export async function appendCustodia(custodia) {
+  const sheets = await getSheetsClient();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: "Custódia!A:E",
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {
+      values: [[
+        custodia.codigo,
+        custodia.data,
+        custodia.instituicao,
+        custodia.descricao,
+        custodia.valor,
+      ]],
+    },
   });
 }
 

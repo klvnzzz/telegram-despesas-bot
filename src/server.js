@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import { Bot, InlineKeyboard } from "grammy";
-import { getDescricoes, addNovaOpcao, appendDespesa, appendReceita, appendAplicacao, getFgts, upsertFgts } from "./sheets.js";
+import { getDescricoes, addNovaOpcao, appendDespesa, appendReceita, appendAplicacao, getFgts, upsertFgts, appendCustodia } from "./sheets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -202,6 +202,30 @@ app.post("/api/fgts", async (req, res) => {
   }
 });
 
+// Registra um lançamento de custódia
+app.post("/api/custodia", async (req, res) => {
+  try {
+    const { descricao, instituicao, data, valor } = req.body;
+
+    if (!descricao || !instituicao || !data || !valor) {
+      return res.status(400).json({ erro: "Todos os campos são obrigatórios." });
+    }
+
+    await appendCustodia({
+      codigo: uuidv4(),
+      data,
+      instituicao,
+      descricao,
+      valor,
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Erro ao salvar custódia:", err);
+    res.status(500).json({ erro: "Não foi possível salvar o registro de custódia." });
+  }
+});
+
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
 
 // ---------- Bot do Telegram ----------
@@ -221,7 +245,9 @@ async function enviarMenu(ctx) {
     .row()
     .webApp("📈 Registrar aplicação", `${PUBLIC_URL}/miniapp/aplicacao.html`)
     .row()
-    .webApp("🏦 Atualizar FGTS", `${PUBLIC_URL}/miniapp/fgts.html`);
+    .webApp("🏦 Atualizar FGTS", `${PUBLIC_URL}/miniapp/fgts.html`)
+    .row()
+    .webApp("👤 Registrar custódia", `${PUBLIC_URL}/miniapp/custodia.html`);
   await ctx.reply("O que você quer registrar?", { reply_markup: teclado });
 }
 
