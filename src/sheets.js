@@ -263,6 +263,33 @@ export async function buscarRegistro(aba, codigo) {
   return linhas.find((l) => l.codigo === codigo) || null;
 }
 
+// Marca várias despesas como "Pago" de uma vez, com apenas 1 leitura + 1 escrita em lote
+// (bem mais rápido que atualizar registro por registro)
+export async function marcarDespesasComoPagas(codigos) {
+  const config = CONFIG_ABAS.despesa;
+  const linhas = await listarLinhas("despesa");
+  const linhasAlvo = linhas.filter((l) => codigos.includes(l.codigo));
+
+  if (!linhasAlvo.length) return { atualizadas: 0 };
+
+  const indiceStatus = config.colunas.indexOf("status");
+  const colunaStatus = String.fromCharCode(65 + indiceStatus);
+
+  const sheets = await getSheetsClient();
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      valueInputOption: "USER_ENTERED",
+      data: linhasAlvo.map((l) => ({
+        range: `${config.nome}!${colunaStatus}${l._linha}`,
+        values: [["Pago"]],
+      })),
+    },
+  });
+
+  return { atualizadas: linhasAlvo.length };
+}
+
 // Atualiza um registro existente. Só sobrescreve os campos enviados em novosCampos;
 // qualquer campo não enviado mantém o valor atual da planilha.
 export async function atualizarRegistro(aba, codigo, novosCampos) {

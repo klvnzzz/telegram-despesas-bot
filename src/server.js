@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import { Bot, InlineKeyboard } from "grammy";
-import { getDescricoes, addNovaOpcao, appendDespesa, appendReceita, appendAplicacao, getFgts, upsertFgts, appendCustodia, getAplicacoesParaSelecao, appendResgate, listarRegistros, buscarRegistro, atualizarRegistro } from "./sheets.js";
+import { getDescricoes, addNovaOpcao, appendDespesa, appendReceita, appendAplicacao, getFgts, upsertFgts, appendCustodia, getAplicacoesParaSelecao, appendResgate, listarRegistros, buscarRegistro, atualizarRegistro, marcarDespesasComoPagas } from "./sheets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -339,11 +339,9 @@ app.post("/api/despesas/marcar-pagas", async (req, res) => {
       return res.status(400).json({ erro: "Selecione ao menos uma despesa." });
     }
 
-    for (const codigo of codigos) {
-      await atualizarRegistro("despesa", codigo, { status: "Pago" });
-    }
+    const { atualizadas } = await marcarDespesasComoPagas(codigos);
 
-    res.json({ ok: true, quantidade: codigos.length });
+    res.json({ ok: true, quantidade: atualizadas });
   } catch (err) {
     console.error("Erro ao marcar despesas como pagas:", err);
     res.status(500).json({ erro: "Não foi possível marcar as despesas como pagas." });
