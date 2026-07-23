@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import { Bot, InlineKeyboard } from "grammy";
-import { getDescricoes, addNovaOpcao, appendDespesa, appendReceita, appendAplicacao } from "./sheets.js";
+import { getDescricoes, addNovaOpcao, appendDespesa, appendReceita, appendAplicacao, getFgts, upsertFgts } from "./sheets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -62,6 +62,12 @@ function obterDataHojeBrasilia() {
 // Soma N meses a uma data (ano/mes/dia) e devolve no formato YYYY-MM-DD
 function formatarDataComIncrementoMeses({ ano, mes, dia }, incrementoMeses) {
   const dataUtc = new Date(Date.UTC(ano, mes - 1 + incrementoMeses, dia));
+  return dataUtc.toISOString().slice(0, 10);
+}
+
+// Devolve o último dia do mês de uma data (ano/mes), no formato YYYY-MM-DD
+function obterUltimoDiaDoMes({ ano, mes }) {
+  const dataUtc = new Date(Date.UTC(ano, mes, 0)); // dia 0 do mês seguinte = último dia do mês atual
   return dataUtc.toISOString().slice(0, 10);
 }
 
@@ -167,6 +173,35 @@ app.post("/api/aplicacao", async (req, res) => {
   }
 });
 
+// Devolve o valor atual do FGTS (pra mostrar como referência no formulário)
+app.get("/api/fgts", async (req, res) => {
+  try {
+    const fgts = await getFgts();
+    res.json(fgts);
+  } catch (err) {
+    console.error("Erro ao buscar FGTS:", err);
+    res.status(500).json({ erro: "Não foi possível carregar o FGTS." });
+  }
+});
+
+// Atualiza (ou cria, na primeira vez) o registro único do FGTS
+app.post("/api/fgts", async (req, res) => {
+  try {
+    const { valorAtualizado } = req.body;
+    if (!valorAtualizado) {
+      return res.status(400).json({ erro: "Valor atualizado é obrigatório." });
+    }
+
+    const data = obterUltimoDiaDoMes(obterDataHojeBrasilia());
+    await upsertFgts({ data, valorAtualizado });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Erro ao atualizar FGTS:", err);
+    res.status(500).json({ erro: "Não foi possível atualizar o FGTS." });
+  }
+});
+
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
 
 // ---------- Bot do Telegram ----------
@@ -184,7 +219,9 @@ async function enviarMenu(ctx) {
     .row()
     .webApp("💰 Registrar receita", `${PUBLIC_URL}/miniapp/receita.html`)
     .row()
-    .webApp("📈 Registrar aplicação", `${PUBLIC_URL}/miniapp/aplicacao.html`);
+    .webApp("📈 Registrar aplicação", `${PUBLIC_URL}/miniapp/aplicacao.html`)
+    .row()
+    .webApp("🏦 Atualizar FGTS", `${PUBLIC_URL}/miniapp/fgts.html`);
   await ctx.reply("O que você quer registrar?", { reply_markup: teclado });
 }
 

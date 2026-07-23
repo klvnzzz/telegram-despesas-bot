@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { v4 as uuidv4 } from "uuid";
 
 const SHEET_ID = process.env.SHEET_ID;
 
@@ -79,6 +80,32 @@ export async function addNovaOpcao(campo, valor) {
     range: `Descrições!${coluna}${proximaLinha}`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [[valor]] },
+  });
+}
+
+// Lê o registro único do FGTS (ou null se ainda não existir)
+export async function getFgts() {
+  const sheets = await getSheetsClient();
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: "FGTS!A2:C2",
+  });
+  const linha = data.values && data.values[0];
+  if (!linha) return null;
+  return { codigo: linha[0], data: linha[1], valorAtualizado: linha[2] };
+}
+
+// Cria (na primeira vez) ou atualiza (nas seguintes) o único registro do FGTS
+export async function upsertFgts({ data, valorAtualizado }) {
+  const sheets = await getSheetsClient();
+  const existente = await getFgts();
+  const codigo = existente ? existente.codigo : uuidv4();
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: "FGTS!A2:C2",
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[codigo, data, valorAtualizado]] },
   });
 }
 
