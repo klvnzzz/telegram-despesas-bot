@@ -142,19 +142,14 @@
     });
   }
 
-  async function resolverValorCampo(select, inputNovo, campoDescricoes) {
-    if (select.value !== OPCAO_OUTRO) return select.value;
+  // Não salva nada ainda: só resolve o valor e sinaliza se é uma categoria nova pra registrar depois
+  function resolverValorCampo(select, inputNovo) {
+    if (select.value !== OPCAO_OUTRO) return { valor: select.value, novaOpcao: null };
 
     const novoValor = inputNovo.value.trim();
-    if (!novoValor) throw new Error("Preencha a nova categoria.");
+    if (!novoValor) throw new Error("Preencha a nova categoria antes de salvar.");
 
-    await fetch("/api/opcoes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ campo: campoDescricoes, valor: novoValor }),
-    });
-
-    return novoValor;
+    return { valor: novoValor, novaOpcao: novoValor };
   }
 
   const blocosContainer = document.getElementById("blocos");
@@ -273,24 +268,35 @@
 
     const objetoBloco = {
       raiz,
-      obterPayload: async () => {
-        const descricao = await resolverValorCampo(raiz.querySelector(".c-descricao"), raiz.querySelector(".c-descricao-novo"), "despesas");
-        const doQue = await resolverValorCampo(raiz.querySelector(".c-do-que"), raiz.querySelector(".c-do-que-novo"), "doQue");
-        const formaPagamento = await resolverValorCampo(raiz.querySelector(".c-forma-pagamento"), raiz.querySelector(".c-forma-pagamento-novo"), "pagamentos");
+      obterPayload: () => {
+        const { valor: descricao, novaOpcao: novaDescricao } = resolverValorCampo(raiz.querySelector(".c-descricao"), raiz.querySelector(".c-descricao-novo"));
+        const { valor: doQue, novaOpcao: novoDoQue } = resolverValorCampo(raiz.querySelector(".c-do-que"), raiz.querySelector(".c-do-que-novo"));
+        const { valor: formaPagamento, novaOpcao: novaFormaPagamento } = resolverValorCampo(raiz.querySelector(".c-forma-pagamento"), raiz.querySelector(".c-forma-pagamento-novo"));
+
+        const valorNumerico = valorEmCentavos(campoValor.value) / 100;
+        if (!valorNumerico) throw new Error(`O valor da "Despesa ${raiz.querySelector(".bloco-titulo").textContent.replace("Despesa ", "")}" não pode ser zero.`);
 
         const parcelado = raiz.querySelector(".c-parcelado").value === "sim";
         const parcelas = parcelado ? raiz.querySelector(".c-qtd-parcelas").value : 1;
 
+        const novasOpcoes = [];
+        if (novaDescricao) novasOpcoes.push({ campo: "despesas", valor: novaDescricao });
+        if (novoDoQue) novasOpcoes.push({ campo: "doQue", valor: novoDoQue });
+        if (novaFormaPagamento) novasOpcoes.push({ campo: "pagamentos", valor: novaFormaPagamento });
+
         return {
-          descricao,
-          valor: valorEmCentavos(campoValor.value) / 100,
-          doQue,
-          formaPagamento,
-          status: raiz.querySelector(".c-status").value,
-          observacao: raiz.querySelector(".c-observacao").value,
-          parcelas,
-          mesReferencia: raiz.querySelector(".c-mes").value,
-          anoReferencia: raiz.querySelector(".c-ano").value,
+          novasOpcoes,
+          payload: {
+            descricao,
+            valor: valorNumerico,
+            doQue,
+            formaPagamento,
+            status: raiz.querySelector(".c-status").value,
+            observacao: raiz.querySelector(".c-observacao").value,
+            parcelas,
+            mesReferencia: raiz.querySelector(".c-mes").value,
+            anoReferencia: raiz.querySelector(".c-ano").value,
+          },
         };
       },
     };
@@ -322,13 +328,29 @@
     try {
       let salvas = 0;
       for (const bloco of blocos) {
-        const payload = await bloco.obterPayload();
+        const { payload, novasOpcoes } = bloco.obterPayload();
+
         const resp = await fetch("/api/despesa", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        if (!resp.ok) throw new Error(`Falha ao salvar a despesa ${salvas + 1}.`);
+
+        if (!resp.ok) {
+          let msg = `Falha ao salvar a despesa ${salvas + 1}.`;
+          try { const dados = await resp.json(); if (dados.erro) msg = dados.erro; } catch {}
+          throw new Error(msg);
+        }
+
+        // Só registra as categorias novas ("Outro") depois que a despesa foi salva de verdade
+        for (const nova of novasOpcoes) {
+          await fetch("/api/opcoes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(nova),
+          });
+        }
+
         salvas++;
       }
 

@@ -135,19 +135,13 @@
     });
   }
 
-  async function resolverValorCampo(select, inputNovo, campoDescricoes) {
-    if (select.value !== OPCAO_OUTRO) return select.value;
+  function resolverValorCampo(select, inputNovo) {
+    if (select.value !== OPCAO_OUTRO) return { valor: select.value, novaOpcao: null };
 
     const novoValor = inputNovo.value.trim();
     if (!novoValor) throw new Error("Preencha o novo valor antes de salvar.");
 
-    await fetch("/api/opcoes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ campo: campoDescricoes, valor: novoValor }),
-    });
-
-    return novoValor;
+    return { valor: novoValor, novaOpcao: novoValor };
   }
 
   const blocosContainer = document.getElementById("blocos");
@@ -226,17 +220,33 @@
 
     const objetoBloco = {
       raiz,
-      obterPayload: async () => {
-        const descricao = await resolverValorCampo(raiz.querySelector(".c-descricao"), raiz.querySelector(".c-descricao-novo"), "aplicacao");
-        const instituicao = await resolverValorCampo(raiz.querySelector(".c-instituicao"), raiz.querySelector(".c-instituicao-novo"), "instituicao");
+      obterPayload: () => {
+        const { valor: descricao, novaOpcao: novaDescricao } = resolverValorCampo(raiz.querySelector(".c-descricao"), raiz.querySelector(".c-descricao-novo"));
+        const { valor: instituicao, novaOpcao: novaInstituicao } = resolverValorCampo(raiz.querySelector(".c-instituicao"), raiz.querySelector(".c-instituicao-novo"));
+
+        const numeroBloco = raiz.querySelector(".bloco-titulo").textContent.replace("Aplicação ", "");
+        const valorComprado = valorEmUnidade(campoValorComprado.value);
+        const cotacao = valorEmUnidade(campoCotacao.value, 6);
+        const valorRecebido = valorEmUnidade(campoValorRecebido.value);
+
+        if (!valorComprado) throw new Error(`O "Valor comprado" da Aplicação ${numeroBloco} não pode ser zero.`);
+        if (!cotacao) throw new Error(`A "Cotação de compra" da Aplicação ${numeroBloco} não pode ser zero.`);
+        if (!valorRecebido) throw new Error(`O "Valor recebido" da Aplicação ${numeroBloco} não pode ser zero.`);
+
+        const novasOpcoes = [];
+        if (novaDescricao) novasOpcoes.push({ campo: "aplicacao", valor: novaDescricao });
+        if (novaInstituicao) novasOpcoes.push({ campo: "instituicao", valor: novaInstituicao });
 
         return {
-          descricao,
-          instituicao,
-          dataAplicacao: raiz.querySelector(".c-data").value,
-          valorComprado: valorEmUnidade(campoValorComprado.value),
-          valorDeCompra: valorEmUnidade(campoCotacao.value, 6),
-          valorRecebido: valorEmUnidade(campoValorRecebido.value),
+          novasOpcoes,
+          payload: {
+            descricao,
+            instituicao,
+            dataAplicacao: raiz.querySelector(".c-data").value,
+            valorComprado,
+            valorDeCompra: cotacao,
+            valorRecebido,
+          },
         };
       },
     };
@@ -268,13 +278,28 @@
     try {
       let salvas = 0;
       for (const bloco of blocos) {
-        const payload = await bloco.obterPayload();
+        const { payload, novasOpcoes } = bloco.obterPayload();
+
         const resp = await fetch("/api/aplicacao", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        if (!resp.ok) throw new Error(`Falha ao salvar a aplicação ${salvas + 1}.`);
+
+        if (!resp.ok) {
+          let msg = `Falha ao salvar a aplicação ${salvas + 1}.`;
+          try { const dados = await resp.json(); if (dados.erro) msg = dados.erro; } catch {}
+          throw new Error(msg);
+        }
+
+        for (const nova of novasOpcoes) {
+          await fetch("/api/opcoes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(nova),
+          });
+        }
+
         salvas++;
       }
 
