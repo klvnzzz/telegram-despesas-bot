@@ -174,6 +174,13 @@ export async function appendCustodia(custodia) {
   });
 }
 
+// Converte uma data YYYY-MM-DD para o formato brasileiro DD/MM/YYYY
+function formatarDataBR(dataISO) {
+  if (!dataISO || typeof dataISO !== "string" || !dataISO.includes("-")) return dataISO || "sem data";
+  const [ano, mes, dia] = dataISO.split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
 // Configuração de cada aba editável: nome real da aba, colunas na ordem da planilha,
 // quais colunas são datas (pra converter serial->ISO) e como montar o rótulo da lista
 const CONFIG_ABAS = {
@@ -182,28 +189,28 @@ const CONFIG_ABAS = {
     intervalo: "A2:I",
     colunas: ["codigo", "dataRegistro", "dataReferencia", "descricao", "formaPagamento", "valor", "status", "observacao", "doQue"],
     camposData: ["dataRegistro", "dataReferencia"],
-    label: (r) => `${r.descricao || "Sem descrição"} — R$ ${Number(r.valor || 0).toFixed(2).replace(".", ",")} (${r.dataReferencia || "sem data"})`,
+    label: (r) => `${r.descricao || "Sem descrição"} — R$ ${Number(r.valor || 0).toFixed(2).replace(".", ",")} (${formatarDataBR(r.dataReferencia)})`,
   },
   receita: {
     nome: "Receita",
     intervalo: "A2:F",
     colunas: ["codigo", "data", "descricao", "valor", "status", "observacao"],
     camposData: ["data"],
-    label: (r) => `${r.descricao || "Sem descrição"} — R$ ${Number(r.valor || 0).toFixed(2).replace(".", ",")} (${r.data || "sem data"})`,
+    label: (r) => `${r.descricao || "Sem descrição"} — R$ ${Number(r.valor || 0).toFixed(2).replace(".", ",")} (${formatarDataBR(r.data)})`,
   },
   aplicacao: {
     nome: "Aplicação",
     intervalo: "A2:G",
     colunas: ["codigo", "dataAplicacao", "instituicao", "descricao", "valorComprado", "valorDeCompra", "valorRecebido"],
     camposData: ["dataAplicacao"],
-    label: (r) => `${r.descricao || "Sem descrição"} — ${r.instituicao || "Sem instituição"} (${r.dataAplicacao || "sem data"})`,
+    label: (r) => `${r.descricao || "Sem descrição"} — ${r.instituicao || "Sem instituição"} (${formatarDataBR(r.dataAplicacao)})`,
   },
   custodia: {
     nome: "Custódia",
     intervalo: "A2:E",
     colunas: ["codigo", "data", "instituicao", "descricao", "valor"],
     camposData: ["data"],
-    label: (r) => `${r.descricao || "Sem descrição"} — ${r.instituicao || "Sem instituição"} (${r.data || "sem data"})`,
+    label: (r) => `${r.descricao || "Sem descrição"} — ${r.instituicao || "Sem instituição"} (${formatarDataBR(r.data)})`,
   },
 };
 
