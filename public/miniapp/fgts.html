@@ -60,8 +60,6 @@
 
 <h1>Atualizar FGTS</h1>
 
-<p id="valor-atual">Carregando valor atual...</p>
-
 <form id="form-fgts">
   <label for="valorAtualizado">Novo valor atualizado</label>
   <input type="text" inputmode="numeric" id="valorAtualizado" value="R$ 0,00" required />
@@ -86,24 +84,6 @@
     const digitos = campoValor.value.replace(/\D/g, "");
     campoValor.value = formatarMoeda(digitos);
   });
-
-  async function carregarValorAtual() {
-    const el = document.getElementById("valor-atual");
-    try {
-      const resp = await fetch("/api/fgts");
-      const fgts = await resp.json();
-      if (!fgts) {
-        el.textContent = "Ainda não há valor registrado — este será o primeiro.";
-        return;
-      }
-      const valorFormatado = Number(fgts.valorAtualizado).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-      const dataFormatada = new Date(fgts.data + "T00:00:00").toLocaleDateString("pt-BR");
-      el.textContent = `Valor atual: ${valorFormatado} (atualizado em ${dataFormatada})`;
-    } catch {
-      el.textContent = "Não foi possível carregar o valor atual.";
-    }
-  }
-  carregarValorAtual();
 
   const form = document.getElementById("form-fgts");
   const btn = document.getElementById("btn-salvar");
