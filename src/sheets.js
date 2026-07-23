@@ -179,28 +179,28 @@ export async function appendCustodia(custodia) {
 const CONFIG_ABAS = {
   despesa: {
     nome: "Despesa",
-    intervalo: "A:I",
+    intervalo: "A2:I",
     colunas: ["codigo", "dataRegistro", "dataReferencia", "descricao", "formaPagamento", "valor", "status", "observacao", "doQue"],
     camposData: ["dataRegistro", "dataReferencia"],
     label: (r) => `${r.descricao || "Sem descrição"} — R$ ${Number(r.valor || 0).toFixed(2).replace(".", ",")} (${r.dataReferencia || "sem data"})`,
   },
   receita: {
     nome: "Receita",
-    intervalo: "A:F",
+    intervalo: "A2:F",
     colunas: ["codigo", "data", "descricao", "valor", "status", "observacao"],
     camposData: ["data"],
     label: (r) => `${r.descricao || "Sem descrição"} — R$ ${Number(r.valor || 0).toFixed(2).replace(".", ",")} (${r.data || "sem data"})`,
   },
   aplicacao: {
     nome: "Aplicação",
-    intervalo: "A:G",
+    intervalo: "A2:G",
     colunas: ["codigo", "dataAplicacao", "instituicao", "descricao", "valorComprado", "valorDeCompra", "valorRecebido"],
     camposData: ["dataAplicacao"],
     label: (r) => `${r.descricao || "Sem descrição"} — ${r.instituicao || "Sem instituição"} (${r.dataAplicacao || "sem data"})`,
   },
   custodia: {
     nome: "Custódia",
-    intervalo: "A:E",
+    intervalo: "A2:E",
     colunas: ["codigo", "data", "instituicao", "descricao", "valor"],
     camposData: ["data"],
     label: (r) => `${r.descricao || "Sem descrição"} — ${r.instituicao || "Sem instituição"} (${r.data || "sem data"})`,

@@ -32,6 +32,12 @@
     background: var(--bg);
     color: var(--text);
   }
+  .campo-data {
+    display: flex;
+    gap: 8px;
+  }
+  .campo-data input[type="number"] { flex: 1; }
+  .campo-data select { flex: 2; }
   .grid-abas {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -267,11 +273,35 @@
     return { wrapper, getValor: async () => input.value };
   }
 
+  const NOMES_MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
   function criarCampoData(campo, valorAtual) {
     const wrapper = document.createElement("div");
-    wrapper.innerHTML = `<label>${campo.rotulo}</label><input type="date" value="${valorAtual || ""}" />`;
-    const input = wrapper.querySelector("input");
-    return { wrapper, getValor: async () => input.value };
+    const [anoAtual, mesAtual, diaAtual] = (valorAtual || "").split("-").map(Number);
+
+    const opcoesMeses = NOMES_MESES.map((nome, i) => `<option value="${i + 1}">${nome}</option>`).join("");
+
+    wrapper.innerHTML = `
+      <label>${campo.rotulo}</label>
+      <div class="campo-data">
+        <input type="number" min="1" max="31" placeholder="Dia" value="${diaAtual || ""}" />
+        <select>${opcoesMeses}</select>
+        <input type="number" placeholder="Ano" value="${anoAtual || ""}" />
+      </div>
+    `;
+
+    const [inputDia, selectMes, inputAno] = wrapper.querySelectorAll("input, select");
+    if (mesAtual) selectMes.value = String(mesAtual);
+
+    return {
+      wrapper,
+      getValor: async () => {
+        const dia = String(inputDia.value || 1).padStart(2, "0");
+        const mes = String(selectMes.value).padStart(2, "0");
+        const ano = inputAno.value;
+        return `${ano}-${mes}-${dia}`;
+      },
+    };
   }
 
   function criarCampoFixo(campo, valorAtual) {
