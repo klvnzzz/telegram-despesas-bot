@@ -34,9 +34,40 @@
   }
   .linha-dupla { display: flex; gap: 8px; }
   .linha-dupla > div { flex: 1; }
+  .bloco {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .bloco-cabecalho {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bloco-titulo { font-size: 14px; font-weight: 600; }
+  .btn-remover-bloco {
+    width: auto;
+    background: none;
+    border: none;
+    color: #d64545;
+    font-size: 13px;
+    padding: 0;
+  }
+  #btn-adicionar {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--accent);
+    background: none;
+    border: 1px dashed var(--accent);
+    border-radius: 8px;
+    margin-bottom: 8px;
+  }
   #btn-salvar {
     width: 100%;
-    margin-top: 20px;
+    margin-top: 12px;
     padding: 12px;
     font-size: 15px;
     font-weight: 600;
@@ -56,42 +87,9 @@
 <h1>Nova receita</h1>
 
 <form id="form-receita">
-  <label for="descricao">Descrição</label>
-  <select id="descricao" required></select>
-  <input type="text" id="descricaoNovo" placeholder="Digite a nova descrição" style="display:none; margin-top:8px;" />
-
-  <label for="valor">Valor</label>
-  <input type="text" inputmode="numeric" id="valor" value="R$ 0,00" required />
-
-  <label>Data (mês de referência)</label>
-  <div class="linha-dupla">
-    <select id="mesReferencia">
-      <option value="1">Janeiro</option>
-      <option value="2">Fevereiro</option>
-      <option value="3">Março</option>
-      <option value="4">Abril</option>
-      <option value="5">Maio</option>
-      <option value="6">Junho</option>
-      <option value="7">Julho</option>
-      <option value="8">Agosto</option>
-      <option value="9">Setembro</option>
-      <option value="10">Outubro</option>
-      <option value="11">Novembro</option>
-      <option value="12">Dezembro</option>
-    </select>
-    <input type="number" id="anoReferencia" placeholder="Ano" />
-  </div>
-
-  <label for="status">Status</label>
-  <select id="status">
-    <option value="Pendente">Pendente</option>
-    <option value="Recebido">Recebido</option>
-  </select>
-
-  <label for="observacao">Observação</label>
-  <input type="text" id="observacao" placeholder="Opcional" />
-
-  <button type="submit" id="btn-salvar">Salvar receita</button>
+  <div id="blocos"></div>
+  <button type="button" id="btn-adicionar">+ Adicionar outra receita</button>
+  <button type="submit" id="btn-salvar">Salvar receita(s)</button>
   <p id="mensagem"></p>
 </form>
 
@@ -101,24 +99,14 @@
 
   const OPCAO_OUTRO = "Outro";
 
-  // Máscara de moeda: mantém só os dígitos digitados e formata como R$ 0,00
-  const campoValor = document.getElementById("valor");
-  function formatarMoeda(digitos) {
-    const centavos = parseInt(digitos || "0", 10);
-    return (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  let opcoesGlobais = null;
+  async function garantirOpcoes() {
+    if (!opcoesGlobais) {
+      const resp = await fetch("/api/opcoes");
+      opcoesGlobais = await resp.json();
+    }
+    return opcoesGlobais;
   }
-  function valorEmCentavos(texto) {
-    return parseInt((texto.match(/\d/g) || ["0"]).join(""), 10);
-  }
-  campoValor.addEventListener("input", () => {
-    const digitos = campoValor.value.replace(/\D/g, "");
-    campoValor.value = formatarMoeda(digitos);
-  });
-
-  // Pré-seleciona o mês e ano atuais como padrão
-  const hoje = new Date();
-  document.getElementById("mesReferencia").value = String(hoje.getMonth() + 1);
-  document.getElementById("anoReferencia").value = String(hoje.getFullYear());
 
   function preencherSelect(select, lista, inputNovo, placeholder = null) {
     select.innerHTML = "";
@@ -149,18 +137,10 @@
     });
   }
 
-  async function carregarOpcoes() {
-    const resp = await fetch("/api/opcoes");
-    const dados = await resp.json();
-    preencherSelect(document.getElementById("descricao"), dados.receitas, document.getElementById("descricaoNovo"), "Selecione uma descrição");
-  }
-  carregarOpcoes();
-
-  async function resolverValorCampo(selectId, inputNovoId, campoDescricoes) {
-    const select = document.getElementById(selectId);
+  async function resolverValorCampo(select, inputNovo, campoDescricoes) {
     if (select.value !== OPCAO_OUTRO) return select.value;
 
-    const novoValor = document.getElementById(inputNovoId).value.trim();
+    const novoValor = inputNovo.value.trim();
     if (!novoValor) throw new Error("Preencha a nova descrição.");
 
     await fetch("/api/opcoes", {
@@ -171,6 +151,115 @@
 
     return novoValor;
   }
+
+  const blocosContainer = document.getElementById("blocos");
+  let blocos = [];
+  let contadorBlocos = 0;
+
+  async function criarBloco() {
+    contadorBlocos++;
+    const numero = contadorBlocos;
+
+    const raiz = document.createElement("div");
+    raiz.className = "bloco";
+    raiz.innerHTML = `
+      <div class="bloco-cabecalho">
+        <span class="bloco-titulo">Receita ${numero}</span>
+        <button type="button" class="btn-remover-bloco">Remover</button>
+      </div>
+
+      <label>Descrição</label>
+      <select class="c-descricao" required></select>
+      <input type="text" class="c-descricao-novo" placeholder="Digite a nova descrição" style="display:none; margin-top:8px;" />
+
+      <label>Valor</label>
+      <input type="text" class="c-valor" inputmode="numeric" value="R$ 0,00" required />
+
+      <label>Data (mês de referência)</label>
+      <div class="linha-dupla">
+        <select class="c-mes">
+          <option value="1">Janeiro</option>
+          <option value="2">Fevereiro</option>
+          <option value="3">Março</option>
+          <option value="4">Abril</option>
+          <option value="5">Maio</option>
+          <option value="6">Junho</option>
+          <option value="7">Julho</option>
+          <option value="8">Agosto</option>
+          <option value="9">Setembro</option>
+          <option value="10">Outubro</option>
+          <option value="11">Novembro</option>
+          <option value="12">Dezembro</option>
+        </select>
+        <input type="number" class="c-ano" placeholder="Ano" />
+      </div>
+
+      <label>Status</label>
+      <select class="c-status">
+        <option value="Pendente">Pendente</option>
+        <option value="Recebido">Recebido</option>
+      </select>
+
+      <label>Observação</label>
+      <input type="text" class="c-observacao" placeholder="Opcional" />
+    `;
+
+    const campoValor = raiz.querySelector(".c-valor");
+    function formatarMoeda(digitos) {
+      const centavos = parseInt(digitos || "0", 10);
+      return (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    }
+    function valorEmCentavos(texto) {
+      return parseInt((texto.match(/\d/g) || ["0"]).join(""), 10);
+    }
+    campoValor.addEventListener("input", () => {
+      const digitos = campoValor.value.replace(/\D/g, "");
+      campoValor.value = formatarMoeda(digitos);
+    });
+
+    const hoje = new Date();
+    raiz.querySelector(".c-mes").value = String(hoje.getMonth() + 1);
+    raiz.querySelector(".c-ano").value = String(hoje.getFullYear());
+
+    const opcoes = await garantirOpcoes();
+    preencherSelect(raiz.querySelector(".c-descricao"), opcoes.receitas, raiz.querySelector(".c-descricao-novo"), "Selecione uma descrição");
+
+    raiz.querySelector(".btn-remover-bloco").addEventListener("click", () => {
+      if (blocos.length <= 1) return;
+      blocos = blocos.filter((b) => b.raiz !== raiz);
+      raiz.remove();
+      renumerarBlocos();
+    });
+
+    const objetoBloco = {
+      raiz,
+      obterPayload: async () => {
+        const descricao = await resolverValorCampo(raiz.querySelector(".c-descricao"), raiz.querySelector(".c-descricao-novo"), "receitas");
+
+        return {
+          descricao,
+          valor: valorEmCentavos(campoValor.value) / 100,
+          mesReferencia: raiz.querySelector(".c-mes").value,
+          anoReferencia: raiz.querySelector(".c-ano").value,
+          status: raiz.querySelector(".c-status").value,
+          observacao: raiz.querySelector(".c-observacao").value,
+        };
+      },
+    };
+
+    blocos.push(objetoBloco);
+    blocosContainer.appendChild(raiz);
+  }
+
+  function renumerarBlocos() {
+    blocos.forEach((b, i) => {
+      b.raiz.querySelector(".bloco-titulo").textContent = `Receita ${i + 1}`;
+    });
+    contadorBlocos = blocos.length;
+  }
+
+  document.getElementById("btn-adicionar").addEventListener("click", () => criarBloco());
+  criarBloco();
 
   const form = document.getElementById("form-receita");
   const btn = document.getElementById("btn-salvar");
@@ -183,31 +272,24 @@
     mensagem.className = "";
 
     try {
-      const descricao = await resolverValorCampo("descricao", "descricaoNovo", "receitas");
+      let salvas = 0;
+      for (const bloco of blocos) {
+        const payload = await bloco.obterPayload();
+        const resp = await fetch("/api/receita", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) throw new Error(`Falha ao salvar a receita ${salvas + 1}.`);
+        salvas++;
+      }
 
-      const payload = {
-        descricao,
-        valor: valorEmCentavos(campoValor.value) / 100,
-        mesReferencia: document.getElementById("mesReferencia").value,
-        anoReferencia: document.getElementById("anoReferencia").value,
-        status: document.getElementById("status").value,
-        observacao: document.getElementById("observacao").value,
-      };
-
-      const resp = await fetch("/api/receita", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!resp.ok) throw new Error("Falha ao salvar.");
-
-      mensagem.textContent = "Receita registrada na planilha ✓";
+      mensagem.textContent = salvas > 1 ? `${salvas} receitas registradas na planilha ✓` : "Receita registrada na planilha ✓";
       mensagem.className = "sucesso";
 
       setTimeout(() => { if (tg) tg.close(); }, 1200);
     } catch (err) {
-      mensagem.textContent = err.message || "Erro ao salvar a receita.";
+      mensagem.textContent = err.message || "Erro ao salvar as receitas.";
       mensagem.className = "erro";
       btn.disabled = false;
     }

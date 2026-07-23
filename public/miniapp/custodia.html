@@ -32,9 +32,40 @@
     background: var(--bg);
     color: var(--text);
   }
+  .bloco {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .bloco-cabecalho {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bloco-titulo { font-size: 14px; font-weight: 600; }
+  .btn-remover-bloco {
+    width: auto;
+    background: none;
+    border: none;
+    color: #d64545;
+    font-size: 13px;
+    padding: 0;
+  }
+  #btn-adicionar {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--accent);
+    background: none;
+    border: 1px dashed var(--accent);
+    border-radius: 8px;
+    margin-bottom: 8px;
+  }
   #btn-salvar {
     width: 100%;
-    margin-top: 20px;
+    margin-top: 12px;
     padding: 12px;
     font-size: 15px;
     font-weight: 600;
@@ -54,21 +85,9 @@
 <h1>Nova custódia</h1>
 
 <form id="form-custodia">
-  <label for="descricao">Descrição</label>
-  <select id="descricao" required></select>
-  <input type="text" id="descricaoNovo" placeholder="Digite a nova descrição" style="display:none; margin-top:8px;" />
-
-  <label for="instituicao">Instituição</label>
-  <select id="instituicao" required></select>
-  <input type="text" id="instituicaoNovo" placeholder="Digite a nova instituição" style="display:none; margin-top:8px;" />
-
-  <label for="data">Data</label>
-  <input type="date" id="data" required />
-
-  <label for="valor">Valor</label>
-  <input type="text" inputmode="numeric" id="valor" value="R$ 0,00" required />
-
-  <button type="submit" id="btn-salvar">Salvar custódia</button>
+  <div id="blocos"></div>
+  <button type="button" id="btn-adicionar">+ Adicionar outra custódia</button>
+  <button type="submit" id="btn-salvar">Salvar custódia(s)</button>
   <p id="mensagem"></p>
 </form>
 
@@ -78,20 +97,14 @@
 
   const OPCAO_OUTRO = "Outro";
 
-  const campoValor = document.getElementById("valor");
-  function formatarMoeda(digitos) {
-    const centavos = parseInt(digitos || "0", 10);
-    return (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  let opcoesGlobais = null;
+  async function garantirOpcoes() {
+    if (!opcoesGlobais) {
+      const resp = await fetch("/api/opcoes");
+      opcoesGlobais = await resp.json();
+    }
+    return opcoesGlobais;
   }
-  function valorEmCentavos(texto) {
-    return parseInt((texto.match(/\d/g) || ["0"]).join(""), 10);
-  }
-  campoValor.addEventListener("input", () => {
-    const digitos = campoValor.value.replace(/\D/g, "");
-    campoValor.value = formatarMoeda(digitos);
-  });
-
-  document.getElementById("data").value = new Date().toISOString().slice(0, 10);
 
   function preencherSelect(select, lista, inputNovo, placeholder = null) {
     select.innerHTML = "";
@@ -122,20 +135,11 @@
     });
   }
 
-  async function carregarOpcoes() {
-    const resp = await fetch("/api/opcoes");
-    const dados = await resp.json();
-    preencherSelect(document.getElementById("descricao"), dados.custodia, document.getElementById("descricaoNovo"), "Selecione uma descrição");
-    preencherSelect(document.getElementById("instituicao"), dados.instituicao, document.getElementById("instituicaoNovo"), "Selecione uma instituição");
-  }
-  carregarOpcoes();
-
-  async function resolverValorCampo(selectId, inputNovoId, campoDescricoes) {
-    const select = document.getElementById(selectId);
+  async function resolverValorCampo(select, inputNovo, campoDescricoes) {
     if (select.value !== OPCAO_OUTRO) return select.value;
 
-    const novoValor = document.getElementById(inputNovoId).value.trim();
-    if (!novoValor) throw new Error("Preencha o campo novo antes de salvar.");
+    const novoValor = inputNovo.value.trim();
+    if (!novoValor) throw new Error("Preencha o novo valor antes de salvar.");
 
     await fetch("/api/opcoes", {
       method: "POST",
@@ -145,6 +149,92 @@
 
     return novoValor;
   }
+
+  const blocosContainer = document.getElementById("blocos");
+  let blocos = [];
+  let contadorBlocos = 0;
+
+  async function criarBloco() {
+    contadorBlocos++;
+    const numero = contadorBlocos;
+
+    const raiz = document.createElement("div");
+    raiz.className = "bloco";
+    raiz.innerHTML = `
+      <div class="bloco-cabecalho">
+        <span class="bloco-titulo">Custódia ${numero}</span>
+        <button type="button" class="btn-remover-bloco">Remover</button>
+      </div>
+
+      <label>Descrição</label>
+      <select class="c-descricao" required></select>
+      <input type="text" class="c-descricao-novo" placeholder="Digite a nova descrição" style="display:none; margin-top:8px;" />
+
+      <label>Instituição</label>
+      <select class="c-instituicao" required></select>
+      <input type="text" class="c-instituicao-novo" placeholder="Digite a nova instituição" style="display:none; margin-top:8px;" />
+
+      <label>Data</label>
+      <input type="date" class="c-data" required />
+
+      <label>Valor</label>
+      <input type="text" class="c-valor" inputmode="numeric" value="R$ 0,00" required />
+    `;
+
+    const campoValor = raiz.querySelector(".c-valor");
+    function formatarMoeda(digitos) {
+      const centavos = parseInt(digitos || "0", 10);
+      return (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    }
+    function valorEmCentavos(texto) {
+      return parseInt((texto.match(/\d/g) || ["0"]).join(""), 10);
+    }
+    campoValor.addEventListener("input", () => {
+      const digitos = campoValor.value.replace(/\D/g, "");
+      campoValor.value = formatarMoeda(digitos);
+    });
+
+    raiz.querySelector(".c-data").value = new Date().toISOString().slice(0, 10);
+
+    const opcoes = await garantirOpcoes();
+    preencherSelect(raiz.querySelector(".c-descricao"), opcoes.custodia, raiz.querySelector(".c-descricao-novo"), "Selecione uma descrição");
+    preencherSelect(raiz.querySelector(".c-instituicao"), opcoes.instituicao, raiz.querySelector(".c-instituicao-novo"), "Selecione uma instituição");
+
+    raiz.querySelector(".btn-remover-bloco").addEventListener("click", () => {
+      if (blocos.length <= 1) return;
+      blocos = blocos.filter((b) => b.raiz !== raiz);
+      raiz.remove();
+      renumerarBlocos();
+    });
+
+    const objetoBloco = {
+      raiz,
+      obterPayload: async () => {
+        const descricao = await resolverValorCampo(raiz.querySelector(".c-descricao"), raiz.querySelector(".c-descricao-novo"), "custodia");
+        const instituicao = await resolverValorCampo(raiz.querySelector(".c-instituicao"), raiz.querySelector(".c-instituicao-novo"), "instituicao");
+
+        return {
+          descricao,
+          instituicao,
+          data: raiz.querySelector(".c-data").value,
+          valor: valorEmCentavos(campoValor.value) / 100,
+        };
+      },
+    };
+
+    blocos.push(objetoBloco);
+    blocosContainer.appendChild(raiz);
+  }
+
+  function renumerarBlocos() {
+    blocos.forEach((b, i) => {
+      b.raiz.querySelector(".bloco-titulo").textContent = `Custódia ${i + 1}`;
+    });
+    contadorBlocos = blocos.length;
+  }
+
+  document.getElementById("btn-adicionar").addEventListener("click", () => criarBloco());
+  criarBloco();
 
   const form = document.getElementById("form-custodia");
   const btn = document.getElementById("btn-salvar");
@@ -157,30 +247,24 @@
     mensagem.className = "";
 
     try {
-      const descricao = await resolverValorCampo("descricao", "descricaoNovo", "custodia");
-      const instituicao = await resolverValorCampo("instituicao", "instituicaoNovo", "instituicao");
+      let salvas = 0;
+      for (const bloco of blocos) {
+        const payload = await bloco.obterPayload();
+        const resp = await fetch("/api/custodia", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) throw new Error(`Falha ao salvar a custódia ${salvas + 1}.`);
+        salvas++;
+      }
 
-      const payload = {
-        descricao,
-        instituicao,
-        data: document.getElementById("data").value,
-        valor: valorEmCentavos(campoValor.value) / 100,
-      };
-
-      const resp = await fetch("/api/custodia", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!resp.ok) throw new Error("Falha ao salvar.");
-
-      mensagem.textContent = "Custódia registrada na planilha ✓";
+      mensagem.textContent = salvas > 1 ? `${salvas} custódias registradas na planilha ✓` : "Custódia registrada na planilha ✓";
       mensagem.className = "sucesso";
 
       setTimeout(() => { if (tg) tg.close(); }, 1200);
     } catch (err) {
-      mensagem.textContent = err.message || "Erro ao salvar a custódia.";
+      mensagem.textContent = err.message || "Erro ao salvar as custódias.";
       mensagem.className = "erro";
       btn.disabled = false;
     }

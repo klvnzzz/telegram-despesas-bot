@@ -32,10 +32,40 @@
     background: var(--bg);
     color: var(--text);
   }
-  p.dica { font-size: 11px; color: var(--muted); margin: 12px 0 0; }
+  .bloco {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .bloco-cabecalho {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bloco-titulo { font-size: 14px; font-weight: 600; }
+  .btn-remover-bloco {
+    width: auto;
+    background: none;
+    border: none;
+    color: #d64545;
+    font-size: 13px;
+    padding: 0;
+  }
+  #btn-adicionar {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--accent);
+    background: none;
+    border: 1px dashed var(--accent);
+    border-radius: 8px;
+    margin-bottom: 8px;
+  }
   #btn-salvar {
     width: 100%;
-    margin-top: 20px;
+    margin-top: 12px;
     padding: 12px;
     font-size: 15px;
     font-weight: 600;
@@ -55,27 +85,9 @@
 <h1>Nova aplicação</h1>
 
 <form id="form-aplicacao">
-  <label for="descricao">Descrição</label>
-  <select id="descricao" required></select>
-  <input type="text" id="descricaoNovo" placeholder="Digite a nova descrição" style="display:none; margin-top:8px;" />
-
-  <label for="instituicao">Instituição</label>
-  <select id="instituicao" required></select>
-  <input type="text" id="instituicaoNovo" placeholder="Digite a nova instituição" style="display:none; margin-top:8px;" />
-
-  <label for="dataAplicacao">Data de aplicação</label>
-  <input type="date" id="dataAplicacao" required />
-
-  <label for="valorComprado">Valor comprado</label>
-  <input type="text" inputmode="numeric" id="valorComprado" value="R$ 0,00" required />
-
-  <label for="valorDeCompra">Cotação de compra</label>
-  <input type="text" inputmode="numeric" id="valorDeCompra" value="R$ 0,000000" required />
-
-  <label for="valorRecebido">Valor recebido <span style="color:var(--muted); font-weight:400;">(descontando taxas)</span></label>
-  <input type="text" inputmode="numeric" id="valorRecebido" value="R$ 0,00" required />
-
-  <button type="submit" id="btn-salvar">Salvar aplicação</button>
+  <div id="blocos"></div>
+  <button type="button" id="btn-adicionar">+ Adicionar outra aplicação</button>
+  <button type="submit" id="btn-salvar">Salvar aplicação(ões)</button>
   <p id="mensagem"></p>
 </form>
 
@@ -85,33 +97,14 @@
 
   const OPCAO_OUTRO = "Outro";
 
-  // Máscara de moeda: mantém só os dígitos digitados e formata como R$ (casasDecimais configurável)
-  function ativarMascaraMoeda(campo, casasDecimais = 2) {
-    campo.addEventListener("input", () => {
-      const digitos = campo.value.replace(/\D/g, "");
-      const numero = parseInt(digitos || "0", 10) / Math.pow(10, casasDecimais);
-      campo.value = numero.toLocaleString("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-        minimumFractionDigits: casasDecimais,
-        maximumFractionDigits: casasDecimais,
-      });
-    });
+  let opcoesGlobais = null;
+  async function garantirOpcoes() {
+    if (!opcoesGlobais) {
+      const resp = await fetch("/api/opcoes");
+      opcoesGlobais = await resp.json();
+    }
+    return opcoesGlobais;
   }
-  function valorEmUnidade(texto, casasDecimais = 2) {
-    const digitos = (texto.match(/\d/g) || ["0"]).join("");
-    return parseInt(digitos, 10) / Math.pow(10, casasDecimais);
-  }
-
-  const campoValorComprado = document.getElementById("valorComprado");
-  const campoValorDeCompra = document.getElementById("valorDeCompra");
-  const campoValorRecebido = document.getElementById("valorRecebido");
-  ativarMascaraMoeda(campoValorComprado);
-  ativarMascaraMoeda(campoValorDeCompra, 6);
-  ativarMascaraMoeda(campoValorRecebido);
-
-  // Pré-preenche a data de hoje como padrão
-  document.getElementById("dataAplicacao").value = new Date().toISOString().slice(0, 10);
 
   function preencherSelect(select, lista, inputNovo, placeholder = null) {
     select.innerHTML = "";
@@ -142,20 +135,11 @@
     });
   }
 
-  async function carregarOpcoes() {
-    const resp = await fetch("/api/opcoes");
-    const dados = await resp.json();
-    preencherSelect(document.getElementById("descricao"), dados.aplicacao, document.getElementById("descricaoNovo"), "Selecione uma descrição");
-    preencherSelect(document.getElementById("instituicao"), dados.instituicao, document.getElementById("instituicaoNovo"), "Selecione uma instituição");
-  }
-  carregarOpcoes();
-
-  async function resolverValorCampo(selectId, inputNovoId, campoDescricoes) {
-    const select = document.getElementById(selectId);
+  async function resolverValorCampo(select, inputNovo, campoDescricoes) {
     if (select.value !== OPCAO_OUTRO) return select.value;
 
-    const novoValor = document.getElementById(inputNovoId).value.trim();
-    if (!novoValor) throw new Error("Preencha o campo novo antes de salvar.");
+    const novoValor = inputNovo.value.trim();
+    if (!novoValor) throw new Error("Preencha o novo valor antes de salvar.");
 
     await fetch("/api/opcoes", {
       method: "POST",
@@ -165,6 +149,111 @@
 
     return novoValor;
   }
+
+  const blocosContainer = document.getElementById("blocos");
+  let blocos = [];
+  let contadorBlocos = 0;
+
+  async function criarBloco() {
+    contadorBlocos++;
+    const numero = contadorBlocos;
+
+    const raiz = document.createElement("div");
+    raiz.className = "bloco";
+    raiz.innerHTML = `
+      <div class="bloco-cabecalho">
+        <span class="bloco-titulo">Aplicação ${numero}</span>
+        <button type="button" class="btn-remover-bloco">Remover</button>
+      </div>
+
+      <label>Descrição</label>
+      <select class="c-descricao" required></select>
+      <input type="text" class="c-descricao-novo" placeholder="Digite a nova descrição" style="display:none; margin-top:8px;" />
+
+      <label>Instituição</label>
+      <select class="c-instituicao" required></select>
+      <input type="text" class="c-instituicao-novo" placeholder="Digite a nova instituição" style="display:none; margin-top:8px;" />
+
+      <label>Data de aplicação</label>
+      <input type="date" class="c-data" required />
+
+      <label>Valor comprado</label>
+      <input type="text" class="c-valor-comprado" inputmode="numeric" value="R$ 0,00" required />
+
+      <label>Cotação de compra</label>
+      <input type="text" class="c-cotacao" inputmode="numeric" value="R$ 0,000000" required />
+
+      <label>Valor recebido <span style="color:var(--muted); font-weight:400;">(descontando taxas)</span></label>
+      <input type="text" class="c-valor-recebido" inputmode="numeric" value="R$ 0,00" required />
+    `;
+
+    function ativarMascaraMoeda(campo, casasDecimais = 2) {
+      campo.addEventListener("input", () => {
+        const digitos = campo.value.replace(/\D/g, "");
+        const numero = parseInt(digitos || "0", 10) / Math.pow(10, casasDecimais);
+        campo.value = numero.toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+          minimumFractionDigits: casasDecimais,
+          maximumFractionDigits: casasDecimais,
+        });
+      });
+    }
+    function valorEmUnidade(texto, casasDecimais = 2) {
+      const digitos = (texto.match(/\d/g) || ["0"]).join("");
+      return parseInt(digitos, 10) / Math.pow(10, casasDecimais);
+    }
+
+    const campoValorComprado = raiz.querySelector(".c-valor-comprado");
+    const campoCotacao = raiz.querySelector(".c-cotacao");
+    const campoValorRecebido = raiz.querySelector(".c-valor-recebido");
+    ativarMascaraMoeda(campoValorComprado);
+    ativarMascaraMoeda(campoCotacao, 6);
+    ativarMascaraMoeda(campoValorRecebido);
+
+    raiz.querySelector(".c-data").value = new Date().toISOString().slice(0, 10);
+
+    const opcoes = await garantirOpcoes();
+    preencherSelect(raiz.querySelector(".c-descricao"), opcoes.aplicacao, raiz.querySelector(".c-descricao-novo"), "Selecione uma descrição");
+    preencherSelect(raiz.querySelector(".c-instituicao"), opcoes.instituicao, raiz.querySelector(".c-instituicao-novo"), "Selecione uma instituição");
+
+    raiz.querySelector(".btn-remover-bloco").addEventListener("click", () => {
+      if (blocos.length <= 1) return;
+      blocos = blocos.filter((b) => b.raiz !== raiz);
+      raiz.remove();
+      renumerarBlocos();
+    });
+
+    const objetoBloco = {
+      raiz,
+      obterPayload: async () => {
+        const descricao = await resolverValorCampo(raiz.querySelector(".c-descricao"), raiz.querySelector(".c-descricao-novo"), "aplicacao");
+        const instituicao = await resolverValorCampo(raiz.querySelector(".c-instituicao"), raiz.querySelector(".c-instituicao-novo"), "instituicao");
+
+        return {
+          descricao,
+          instituicao,
+          dataAplicacao: raiz.querySelector(".c-data").value,
+          valorComprado: valorEmUnidade(campoValorComprado.value),
+          valorDeCompra: valorEmUnidade(campoCotacao.value, 6),
+          valorRecebido: valorEmUnidade(campoValorRecebido.value),
+        };
+      },
+    };
+
+    blocos.push(objetoBloco);
+    blocosContainer.appendChild(raiz);
+  }
+
+  function renumerarBlocos() {
+    blocos.forEach((b, i) => {
+      b.raiz.querySelector(".bloco-titulo").textContent = `Aplicação ${i + 1}`;
+    });
+    contadorBlocos = blocos.length;
+  }
+
+  document.getElementById("btn-adicionar").addEventListener("click", () => criarBloco());
+  criarBloco();
 
   const form = document.getElementById("form-aplicacao");
   const btn = document.getElementById("btn-salvar");
@@ -177,32 +266,24 @@
     mensagem.className = "";
 
     try {
-      const descricao = await resolverValorCampo("descricao", "descricaoNovo", "aplicacao");
-      const instituicao = await resolverValorCampo("instituicao", "instituicaoNovo", "instituicao");
+      let salvas = 0;
+      for (const bloco of blocos) {
+        const payload = await bloco.obterPayload();
+        const resp = await fetch("/api/aplicacao", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) throw new Error(`Falha ao salvar a aplicação ${salvas + 1}.`);
+        salvas++;
+      }
 
-      const payload = {
-        descricao,
-        instituicao,
-        dataAplicacao: document.getElementById("dataAplicacao").value,
-        valorComprado: valorEmUnidade(campoValorComprado.value),
-        valorDeCompra: valorEmUnidade(campoValorDeCompra.value, 6),
-        valorRecebido: valorEmUnidade(campoValorRecebido.value),
-      };
-
-      const resp = await fetch("/api/aplicacao", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!resp.ok) throw new Error("Falha ao salvar.");
-
-      mensagem.textContent = "Aplicação registrada na planilha ✓";
+      mensagem.textContent = salvas > 1 ? `${salvas} aplicações registradas na planilha ✓` : "Aplicação registrada na planilha ✓";
       mensagem.className = "sucesso";
 
       setTimeout(() => { if (tg) tg.close(); }, 1200);
     } catch (err) {
-      mensagem.textContent = err.message || "Erro ao salvar a aplicação.";
+      mensagem.textContent = err.message || "Erro ao salvar as aplicações.";
       mensagem.className = "erro";
       btn.disabled = false;
     }
