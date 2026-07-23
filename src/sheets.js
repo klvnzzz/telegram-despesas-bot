@@ -8,6 +8,8 @@ const COLUNAS_DESCRICOES = {
   receitas: "B",
   pagamentos: "C",
   doQue: "D",
+  aplicacao: "E",
+  instituicao: "F",
 };
 
 function getAuthClient() {
@@ -25,22 +27,24 @@ async function getSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
-// Lê as 4 colunas da aba Descrições e devolve as listas já limpas (sem células vazias)
+// Lê as 6 colunas da aba Descrições e devolve as listas já limpas (sem células vazias)
 export async function getDescricoes() {
   const sheets = await getSheetsClient();
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
-    range: "Descrições!A2:D500",
+    range: "Descrições!A2:F500",
   });
 
   const rows = data.values || [];
-  const resultado = { despesas: [], receitas: [], pagamentos: [], doQue: [] };
+  const resultado = { despesas: [], receitas: [], pagamentos: [], doQue: [], aplicacao: [], instituicao: [] };
 
   for (const row of rows) {
     if (row[0]) resultado.despesas.push(row[0]);
     if (row[1]) resultado.receitas.push(row[1]);
     if (row[2]) resultado.pagamentos.push(row[2]);
     if (row[3]) resultado.doQue.push(row[3]);
+    if (row[4]) resultado.aplicacao.push(row[4]);
+    if (row[5]) resultado.instituicao.push(row[5]);
   }
 
   const comparar = (a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" });
@@ -48,6 +52,8 @@ export async function getDescricoes() {
   resultado.receitas.sort(comparar);
   resultado.pagamentos.sort(comparar);
   resultado.doQue.sort(comparar);
+  resultado.aplicacao.sort(comparar);
+  resultado.instituicao.sort(comparar);
 
   return resultado;
 }
@@ -76,6 +82,29 @@ export async function addNovaOpcao(campo, valor) {
   });
 }
 
+// Adiciona uma nova linha na aba Aplicação
+// (as demais colunas — quantidade recebida, valor atual, P/L, saldo — são fórmulas da planilha)
+// aplicacao: { codigo, dataAplicacao, instituicao, descricao, valorComprado, valorDeCompra, valorRecebido }
+export async function appendAplicacao(aplicacao) {
+  const sheets = await getSheetsClient();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: "Aplicação!A:G",
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {
+      values: [[
+        aplicacao.codigo,
+        aplicacao.dataAplicacao,
+        aplicacao.instituicao,
+        aplicacao.descricao,
+        aplicacao.valorComprado,
+        aplicacao.valorDeCompra,
+        aplicacao.valorRecebido,
+      ]],
+    },
+  });
+}
 // Adiciona uma nova linha na aba Receita
 // receita: { codigo, data, descricao, valor, status, observacao }
 export async function appendReceita(receita) {
