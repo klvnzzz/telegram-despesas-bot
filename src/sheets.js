@@ -174,6 +174,115 @@ export async function appendCustodia(custodia) {
   });
 }
 
+// Configuração de cada aba editável: nome real da aba, colunas na ordem da planilha,
+// quais colunas são datas (pra converter serial->ISO) e como montar o rótulo da lista
+const CONFIG_ABAS = {
+  despesa: {
+    nome: "Despesa",
+    intervalo: "A:I",
+    colunas: ["codigo", "dataRegistro", "dataReferencia", "descricao", "formaPagamento", "valor", "status", "observacao", "doQue"],
+    camposData: ["dataRegistro", "dataReferencia"],
+    label: (r) => `${r.descricao || "Sem descrição"} — R$ ${Number(r.valor || 0).toFixed(2).replace(".", ",")} (${r.dataReferencia || "sem data"})`,
+  },
+  receita: {
+    nome: "Receita",
+    intervalo: "A:F",
+    colunas: ["codigo", "data", "descricao", "valor", "status", "observacao"],
+    camposData: ["data"],
+    label: (r) => `${r.descricao || "Sem descrição"} — R$ ${Number(r.valor || 0).toFixed(2).replace(".", ",")} (${r.data || "sem data"})`,
+  },
+  aplicacao: {
+    nome: "Aplicação",
+    intervalo: "A:G",
+    colunas: ["codigo", "dataAplicacao", "instituicao", "descricao", "valorComprado", "valorDeCompra", "valorRecebido"],
+    camposData: ["dataAplicacao"],
+    label: (r) => `${r.descricao || "Sem descrição"} — ${r.instituicao || "Sem instituição"} (${r.dataAplicacao || "sem data"})`,
+  },
+  custodia: {
+    nome: "Custódia",
+    intervalo: "A:E",
+    colunas: ["codigo", "data", "instituicao", "descricao", "valor"],
+    camposData: ["data"],
+    label: (r) => `${r.descricao || "Sem descrição"} — ${r.instituicao || "Sem instituição"} (${r.data || "sem data"})`,
+  },
+};
+
+// Converte um número serial do Google Sheets (dias desde 1899-12-30) em data YYYY-MM-DD
+function serialParaISO(serial) {
+  const ms = Math.round((serial - 25569) * 86400 * 1000);
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+// Lê todas as linhas de uma aba, já convertendo datas e marcando o número da linha real na planilha
+async function listarLinhas(aba) {
+  const config = CONFIG_ABAS[aba];
+  if (!config) throw new Error(`Aba inválida: ${aba}`);
+
+  const sheets = await getSheetsClient();
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `${config.nome}!${config.intervalo}`,
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "SERIAL_NUMBER",
+  });
+
+  const rows = data.values || [];
+  return rows
+    .map((row, index) => {
+      const objeto = { _linha: index + 2 }; // a linha 2 da planilha é a primeira linha de dados
+      config.colunas.forEach((nomeColuna, i) => {
+        let valor = row[i];
+        if (valor === undefined || valor === null) valor = "";
+        if (config.camposData.includes(nomeColuna) && typeof valor === "number") {
+          valor = serialParaISO(valor);
+        }
+        objeto[nomeColuna] = valor;
+      });
+      return objeto;
+    })
+    .filter((obj) => obj.codigo); // ignora linhas vazias
+}
+
+// Lista os registros de uma aba (mais recentes primeiro), já com o rótulo pronto pra exibir
+export async function listarRegistros(aba) {
+  const config = CONFIG_ABAS[aba];
+  const linhas = await listarLinhas(aba);
+  return linhas.reverse().map((linha) => ({ ...linha, label: config.label(linha) }));
+}
+
+// Busca um registro específico pelo código (UUID)
+export async function buscarRegistro(aba, codigo) {
+  const linhas = await listarLinhas(aba);
+  return linhas.find((l) => l.codigo === codigo) || null;
+}
+
+// Atualiza um registro existente. Só sobrescreve os campos enviados em novosCampos;
+// qualquer campo não enviado mantém o valor atual da planilha.
+export async function atualizarRegistro(aba, codigo, novosCampos) {
+  const config = CONFIG_ABAS[aba];
+  if (!config) throw new Error(`Aba inválida: ${aba}`);
+
+  const linhas = await listarLinhas(aba);
+  const linha = linhas.find((l) => l.codigo === codigo);
+  if (!linha) throw new Error("Registro não encontrado.");
+
+  const valores = config.colunas.map((nomeColuna) => {
+    if (nomeColuna === "codigo") return codigo;
+    return Object.prototype.hasOwnProperty.call(novosCampos, nomeColuna)
+      ? novosCampos[nomeColuna]
+      : linha[nomeColuna];
+  });
+
+  const ultimaColuna = String.fromCharCode(65 + config.colunas.length - 1);
+  const sheets = await getSheetsClient();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `${config.nome}!A${linha._linha}:${ultimaColuna}${linha._linha}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [valores] },
+  });
+}
+
 // Adiciona uma nova linha na aba Aplicação
 // (as demais colunas — quantidade recebida, valor atual, P/L, saldo — são fórmulas da planilha)
 // aplicacao: { codigo, dataAplicacao, instituicao, descricao, valorComprado, valorDeCompra, valorRecebido }

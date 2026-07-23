@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Editar registro</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1c1c1e;
+    --muted: #6b6b6f;
+    --border: #e2e2e4;
+    --accent: #2f80ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  input, select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 15px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .grid-abas {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .btn-aba {
+    padding: 14px 10px;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .busca {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f5f5f6;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+  }
+  .busca input {
+    border: none;
+    background: transparent;
+    padding: 0;
+    flex: 1;
+  }
+  .lista { display: flex; flex-direction: column; gap: 6px; }
+  .item-lista {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .voltar {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 13px;
+    padding: 0 0 12px;
+    text-align: left;
+    width: auto;
+  }
+  #btn-salvar {
+    width: 100%;
+    margin-top: 20px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+  }
+  #btn-salvar:disabled { opacity: 0.5; }
+  #mensagem { font-size: 13px; margin-top: 10px; text-align: center; }
+  #mensagem.erro { color: #d64545; }
+  #mensagem.sucesso { color: #2e9e5b; }
+  .dica-vazia { font-size: 13px; color: var(--muted); text-align: center; padding: 20px 0; }
+</style>
+</head>
+<body>
+
+<h1>Editar registro</h1>
+
+<!-- Etapa 1: escolher a aba -->
+<div id="etapa-abas">
+  <p style="font-size:14px; color:var(--muted); margin:0 0 12px;">O que você quer editar?</p>
+  <div class="grid-abas">
+    <button class="btn-aba" data-aba="despesa">Despesa</button>
+    <button class="btn-aba" data-aba="receita">Receita</button>
+    <button class="btn-aba" data-aba="aplicacao">Aplicação</button>
+    <button class="btn-aba" data-aba="custodia">Custódia</button>
+  </div>
+</div>
+
+<!-- Etapa 2: lista + busca -->
+<div id="etapa-lista" style="display:none;">
+  <button class="voltar" id="btn-voltar-lista">‹ Voltar</button>
+  <div class="busca">
+    <input type="text" id="campo-busca" placeholder="Buscar por descrição, instituição..." />
+  </div>
+  <div class="lista" id="lista-registros"></div>
+</div>
+
+<!-- Etapa 3: formulário de edição -->
+<div id="etapa-form" style="display:none;">
+  <button class="voltar" id="btn-voltar-form">‹ Voltar</button>
+  <form id="form-editar">
+    <div id="campos-form"></div>
+    <button type="submit" id="btn-salvar">Salvar alterações</button>
+    <p id="mensagem"></p>
+  </form>
+</div>
+
+<script>
+  const tg = window.Telegram?.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  const OPCAO_OUTRO = "Outro";
+
+  // Configuração de campos por aba (reaproveita os padrões dos formulários de criação)
+  const FORM_CONFIGS = {
+    despesa: {
+      campos: [
+        { chave: "descricao", rotulo: "Descrição", tipo: "select", lista: "despesas" },
+        { chave: "formaPagamento", rotulo: "Forma de pagamento", tipo: "select", lista: "pagamentos" },
+        { chave: "valor", rotulo: "Valor", tipo: "moeda" },
+        { chave: "dataReferencia", rotulo: "Data (mês de referência)", tipo: "data" },
+        { chave: "status", rotulo: "Status", tipo: "fixo", valores: ["Pago", "Pendente"] },
+        { chave: "doQue", rotulo: "Do que?", tipo: "select", lista: "doQue", opcional: true },
+        { chave: "observacao", rotulo: "Observação", tipo: "texto" },
+      ],
+    },
+    receita: {
+      campos: [
+        { chave: "descricao", rotulo: "Descrição", tipo: "select", lista: "receitas" },
+        { chave: "valor", rotulo: "Valor", tipo: "moeda" },
+        { chave: "data", rotulo: "Data (mês de referência)", tipo: "data" },
+        { chave: "status", rotulo: "Status", tipo: "fixo", valores: ["Pendente", "Recebido"] },
+        { chave: "observacao", rotulo: "Observação", tipo: "texto" },
+      ],
+    },
+    aplicacao: {
+      campos: [
+        { chave: "descricao", rotulo: "Descrição", tipo: "select", lista: "aplicacao" },
+        { chave: "instituicao", rotulo: "Instituição", tipo: "select", lista: "instituicao" },
+        { chave: "dataAplicacao", rotulo: "Data de aplicação", tipo: "data" },
+        { chave: "valorComprado", rotulo: "Valor comprado", tipo: "moeda" },
+        { chave: "valorDeCompra", rotulo: "Cotação de compra", tipo: "moeda", casasDecimais: 6 },
+        { chave: "valorRecebido", rotulo: "Valor recebido", tipo: "moeda" },
+      ],
+    },
+    custodia: {
+      campos: [
+        { chave: "descricao", rotulo: "Descrição", tipo: "select", lista: "custodia" },
+        { chave: "instituicao", rotulo: "Instituição", tipo: "select", lista: "instituicao" },
+        { chave: "data", rotulo: "Data", tipo: "data" },
+        { chave: "valor", rotulo: "Valor", tipo: "moeda" },
+      ],
+    },
+  };
+
+  let opcoesGlobais = null;
+  async function garantirOpcoes() {
+    if (!opcoesGlobais) {
+      const resp = await fetch("/api/opcoes");
+      opcoesGlobais = await resp.json();
+    }
+    return opcoesGlobais;
+  }
+
+  // ---------- Navegação entre etapas ----------
+  const etapaAbas = document.getElementById("etapa-abas");
+  const etapaLista = document.getElementById("etapa-lista");
+  const etapaForm = document.getElementById("etapa-form");
+
+  let abaAtual = null;
+  let codigoAtual = null;
+
+  function mostrarEtapa(etapa) {
+    etapaAbas.style.display = etapa === "abas" ? "block" : "none";
+    etapaLista.style.display = etapa === "lista" ? "block" : "none";
+    etapaForm.style.display = etapa === "form" ? "block" : "none";
+  }
+
+  document.querySelectorAll(".btn-aba").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      abaAtual = btn.dataset.aba;
+      document.getElementById("campo-busca").value = "";
+      carregarLista();
+      mostrarEtapa("lista");
+    });
+  });
+
+  document.getElementById("btn-voltar-lista").addEventListener("click", () => mostrarEtapa("abas"));
+  document.getElementById("btn-voltar-form").addEventListener("click", () => mostrarEtapa("lista"));
+
+  // ---------- Etapa 2: lista + busca ----------
+  const listaEl = document.getElementById("lista-registros");
+  let timeoutBusca = null;
+
+  async function carregarLista() {
+    const busca = document.getElementById("campo-busca").value.trim();
+    listaEl.innerHTML = "<p class='dica-vazia'>Carregando...</p>";
+
+    try {
+      const resp = await fetch(`/api/registros/${abaAtual}?busca=${encodeURIComponent(busca)}`);
+      const registros = await resp.json();
+
+      if (!registros.length) {
+        listaEl.innerHTML = "<p class='dica-vazia'>Nenhum registro encontrado.</p>";
+        return;
+      }
+
+      listaEl.innerHTML = "";
+      registros.forEach((registro) => {
+        const div = document.createElement("div");
+        div.className = "item-lista";
+        div.textContent = registro.label;
+        div.addEventListener("click", () => abrirFormulario(registro.codigo));
+        listaEl.appendChild(div);
+      });
+    } catch {
+      listaEl.innerHTML = "<p class='dica-vazia'>Erro ao carregar registros.</p>";
+    }
+  }
+
+  document.getElementById("campo-busca").addEventListener("input", () => {
+    clearTimeout(timeoutBusca);
+    timeoutBusca = setTimeout(carregarLista, 300);
+  });
+
+  // ---------- Etapa 3: formulário dinâmico ----------
+  const camposFormEl = document.getElementById("campos-form");
+  const mensagemEl = document.getElementById("mensagem");
+  const btnSalvar = document.getElementById("btn-salvar");
+
+  // Cada handler sabe como ler seu próprio valor final (já resolvendo "Outro" e máscaras)
+  let handlersCampos = {};
+
+  function criarCampoTexto(campo, valorAtual) {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = `<label>${campo.rotulo}</label><input type="text" value="${valorAtual || ""}" />`;
+    const input = wrapper.querySelector("input");
+    return { wrapper, getValor: async () => input.value };
+  }
+
+  function criarCampoData(campo, valorAtual) {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = `<label>${campo.rotulo}</label><input type="date" value="${valorAtual || ""}" />`;
+    const input = wrapper.querySelector("input");
+    return { wrapper, getValor: async () => input.value };
+  }
+
+  function criarCampoFixo(campo, valorAtual) {
+    const wrapper = document.createElement("div");
+    const opcoesHtml = campo.valores.map((v) => `<option value="${v}" ${v === valorAtual ? "selected" : ""}>${v}</option>`).join("");
+    wrapper.innerHTML = `<label>${campo.rotulo}</label><select>${opcoesHtml}</select>`;
+    const select = wrapper.querySelector("select");
+    return { wrapper, getValor: async () => select.value };
+  }
+
+  function criarCampoMoeda(campo, valorAtual) {
+    const casasDecimais = campo.casasDecimais || 2;
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = `<label>${campo.rotulo}</label><input type="text" inputmode="numeric" />`;
+    const input = wrapper.querySelector("input");
+
+    function formatar(digitos) {
+      const numero = parseInt(digitos || "0", 10) / Math.pow(10, casasDecimais);
+      return numero.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: casasDecimais, maximumFractionDigits: casasDecimais });
+    }
+
+    const centavosIniciais = Math.round(Number(valorAtual || 0) * Math.pow(10, casasDecimais));
+    input.value = formatar(String(centavosIniciais));
+
+    input.addEventListener("input", () => {
+      const digitos = input.value.replace(/\D/g, "");
+      input.value = formatar(digitos);
+    });
+
+    return {
+      wrapper,
+      getValor: async () => {
+        const digitos = (input.value.match(/\d/g) || ["0"]).join("");
+        return parseInt(digitos, 10) / Math.pow(10, casasDecimais);
+      },
+    };
+  }
+
+  function criarCampoSelect(campo, valorAtual, opcoes) {
+    const wrapper = document.createElement("div");
+    const lista = opcoes[campo.lista] || [];
+
+    const select = document.createElement("select");
+    const inputNovo = document.createElement("input");
+    inputNovo.type = "text";
+    inputNovo.placeholder = "Digite o novo valor";
+    inputNovo.style.display = "none";
+    inputNovo.style.marginTop = "8px";
+
+    if (campo.opcional) {
+      const optVazia = document.createElement("option");
+      optVazia.value = "";
+      optVazia.textContent = "Nenhuma";
+      select.appendChild(optVazia);
+    }
+
+    // Se o valor atual não estiver na lista oficial, adiciona ele mesmo assim,
+    // pra não perder o dado ao abrir o formulário
+    if (valorAtual && !lista.includes(valorAtual)) {
+      const optAtual = document.createElement("option");
+      optAtual.value = valorAtual;
+      optAtual.textContent = valorAtual;
+      select.appendChild(optAtual);
+    }
+
+    for (const item of lista) {
+      const opt = document.createElement("option");
+      opt.value = item;
+      opt.textContent = item;
+      select.appendChild(opt);
+    }
+
+    const optOutro = document.createElement("option");
+    optOutro.value = OPCAO_OUTRO;
+    optOutro.textContent = "Outro...";
+    select.appendChild(optOutro);
+
+    select.value = valorAtual || "";
+
+    select.addEventListener("change", () => {
+      inputNovo.style.display = select.value === OPCAO_OUTRO ? "block" : "none";
+    });
+
+    const label = document.createElement("label");
+    label.textContent = campo.rotulo;
+    wrapper.appendChild(label);
+    wrapper.appendChild(select);
+    wrapper.appendChild(inputNovo);
+
+    return {
+      wrapper,
+      getValor: async () => {
+        if (select.value !== OPCAO_OUTRO) return select.value;
+        const novoValor = inputNovo.value.trim();
+        if (!novoValor) throw new Error(`Preencha o novo valor de "${campo.rotulo}".`);
+        await fetch("/api/opcoes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ campo: campo.lista, valor: novoValor }),
+        });
+        return novoValor;
+      },
+    };
+  }
+
+  async function abrirFormulario(codigo) {
+    codigoAtual = codigo;
+    mensagemEl.textContent = "";
+    mensagemEl.className = "";
+    camposFormEl.innerHTML = "<p class='dica-vazia'>Carregando registro...</p>";
+    mostrarEtapa("form");
+
+    try {
+      const [registroResp, opcoes] = await Promise.all([
+        fetch(`/api/registros/${abaAtual}/${codigo}`),
+        garantirOpcoes(),
+      ]);
+      const registro = await registroResp.json();
+
+      const config = FORM_CONFIGS[abaAtual];
+      camposFormEl.innerHTML = "";
+      handlersCampos = {};
+
+      for (const campo of config.campos) {
+        const valorAtual = registro[campo.chave];
+        let handler;
+
+        if (campo.tipo === "select") handler = criarCampoSelect(campo, valorAtual, opcoes);
+        else if (campo.tipo === "moeda") handler = criarCampoMoeda(campo, valorAtual);
+        else if (campo.tipo === "data") handler = criarCampoData(campo, valorAtual);
+        else if (campo.tipo === "fixo") handler = criarCampoFixo(campo, valorAtual);
+        else handler = criarCampoTexto(campo, valorAtual);
+
+        handlersCampos[campo.chave] = handler;
+        camposFormEl.appendChild(handler.wrapper);
+      }
+    } catch (err) {
+      camposFormEl.innerHTML = "<p class='dica-vazia'>Erro ao carregar o registro.</p>";
+    }
+  }
+
+  document.getElementById("form-editar").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    btnSalvar.disabled = true;
+    mensagemEl.textContent = "";
+    mensagemEl.className = "";
+
+    try {
+      const payload = {};
+      for (const chave in handlersCampos) {
+        payload[chave] = await handlersCampos[chave].getValor();
+      }
+
+      const resp = await fetch(`/api/registros/${abaAtual}/${codigoAtual}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) throw new Error("Falha ao salvar.");
+
+      mensagemEl.textContent = "Alterações salvas ✓";
+      mensagemEl.className = "sucesso";
+
+      setTimeout(() => { if (tg) tg.close(); }, 1200);
+    } catch (err) {
+      mensagemEl.textContent = err.message || "Erro ao salvar as alterações.";
+      mensagemEl.className = "erro";
+      btnSalvar.disabled = false;
+    }
+  });
+</script>
+
+</body>
+</html>

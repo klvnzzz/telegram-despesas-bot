@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import { Bot, InlineKeyboard } from "grammy";
-import { getDescricoes, addNovaOpcao, appendDespesa, appendReceita, appendAplicacao, getFgts, upsertFgts, appendCustodia, getAplicacoesParaSelecao, appendResgate } from "./sheets.js";
+import { getDescricoes, addNovaOpcao, appendDespesa, appendReceita, appendAplicacao, getFgts, upsertFgts, appendCustodia, getAplicacoesParaSelecao, appendResgate, listarRegistros, buscarRegistro, atualizarRegistro } from "./sheets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -237,26 +237,78 @@ app.get("/api/aplicacoes", async (req, res) => {
   }
 });
 
-// Registra um resgate
+// Registra um ou mais resgates (uma linha por aplicação selecionada)
 app.post("/api/resgate", async (req, res) => {
   try {
-    const { codigoAplicacao, dataResgate, valorResgate } = req.body;
+    const { dataResgate, itens } = req.body;
 
-    if (!codigoAplicacao || !dataResgate || !valorResgate) {
-      return res.status(400).json({ erro: "Todos os campos são obrigatórios." });
+    if (!dataResgate || !Array.isArray(itens) || !itens.length) {
+      return res.status(400).json({ erro: "Data e ao menos uma aplicação são obrigatórios." });
     }
 
-    await appendResgate({
-      codigo: uuidv4(),
-      codigoAplicacao,
-      dataResgate,
-      valorResgate,
-    });
+    for (const item of itens) {
+      if (!item.codigoAplicacao || !item.valorResgate) {
+        return res.status(400).json({ erro: "Cada aplicação selecionada precisa de um valor de resgate." });
+      }
+      await appendResgate({
+        codigo: uuidv4(),
+        codigoAplicacao: item.codigoAplicacao,
+        dataResgate,
+        valorResgate: item.valorResgate,
+      });
+    }
 
-    res.json({ ok: true });
+    res.json({ ok: true, quantidade: itens.length });
   } catch (err) {
     console.error("Erro ao salvar resgate:", err);
     res.status(500).json({ erro: "Não foi possível salvar o resgate." });
+  }
+});
+
+// Lista os registros de uma aba (8 mais recentes, ou até 30 filtrados por busca)
+app.get("/api/registros/:aba", async (req, res) => {
+  try {
+    const { aba } = req.params;
+    const { busca } = req.query;
+
+    let registros = await listarRegistros(aba);
+
+    if (busca) {
+      const termo = busca.toLowerCase();
+      registros = registros.filter((r) => r.label.toLowerCase().includes(termo)).slice(0, 30);
+    } else {
+      registros = registros.slice(0, 8);
+    }
+
+    res.json(registros);
+  } catch (err) {
+    console.error("Erro ao listar registros:", err);
+    res.status(500).json({ erro: "Não foi possível carregar os registros." });
+  }
+});
+
+// Busca um registro específico pra pré-preencher o formulário de edição
+app.get("/api/registros/:aba/:codigo", async (req, res) => {
+  try {
+    const { aba, codigo } = req.params;
+    const registro = await buscarRegistro(aba, codigo);
+    if (!registro) return res.status(404).json({ erro: "Registro não encontrado." });
+    res.json(registro);
+  } catch (err) {
+    console.error("Erro ao buscar registro:", err);
+    res.status(500).json({ erro: "Não foi possível carregar o registro." });
+  }
+});
+
+// Atualiza um registro existente
+app.put("/api/registros/:aba/:codigo", async (req, res) => {
+  try {
+    const { aba, codigo } = req.params;
+    await atualizarRegistro(aba, codigo, req.body);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Erro ao atualizar registro:", err);
+    res.status(500).json({ erro: "Não foi possível atualizar o registro." });
   }
 });
 
@@ -283,7 +335,7 @@ async function enviarMenu(ctx) {
     .row()
     .webApp("👤 Registrar custódia", `${PUBLIC_URL}/miniapp/custodia.html`)
     .row()
-    .webApp("💵 Registrar resgate", `${PUBLIC_URL}/miniapp/resgate.html`);
+    .webApp("✏️ Editar registro", `${PUBLIC_URL}/miniapp/editar.html`);
   await ctx.reply("O que você quer registrar?", { reply_markup: teclado });
 }
 
