@@ -112,6 +112,47 @@ export async function upsertFgts({ data, valorAtualizado }) {
   });
 }
 
+// Lista as aplicações existentes, formatadas pra virar um dropdown legível
+// (mais recentes primeiro)
+export async function getAplicacoesParaSelecao() {
+  const sheets = await getSheetsClient();
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: "Aplicação!A2:D500",
+  });
+
+  const rows = data.values || [];
+  const opcoes = rows
+    .filter((row) => row[0])
+    .map((row) => ({
+      codigo: row[0],
+      label: `${row[3] || "Sem descrição"} — ${row[2] || "Sem instituição"} (${row[1] || "sem data"})`,
+    }));
+
+  return opcoes.reverse();
+}
+
+// Adiciona uma nova linha na aba Resgate
+// (a coluna "lucro" é fórmula da planilha e não é preenchida por aqui)
+// resgate: { codigo, codigoAplicacao, dataResgate, valorResgate }
+export async function appendResgate(resgate) {
+  const sheets = await getSheetsClient();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: "Resgate!A:D",
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {
+      values: [[
+        resgate.codigo,
+        resgate.codigoAplicacao,
+        resgate.dataResgate,
+        resgate.valorResgate,
+      ]],
+    },
+  });
+}
+
 // Adiciona uma nova linha na aba Custódia
 // custodia: { codigo, data, instituicao, descricao, valor }
 export async function appendCustodia(custodia) {

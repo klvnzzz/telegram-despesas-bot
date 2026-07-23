@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import { Bot, InlineKeyboard } from "grammy";
-import { getDescricoes, addNovaOpcao, appendDespesa, appendReceita, appendAplicacao, getFgts, upsertFgts, appendCustodia } from "./sheets.js";
+import { getDescricoes, addNovaOpcao, appendDespesa, appendReceita, appendAplicacao, getFgts, upsertFgts, appendCustodia, getAplicacoesParaSelecao, appendResgate } from "./sheets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -226,6 +226,40 @@ app.post("/api/custodia", async (req, res) => {
   }
 });
 
+// Lista as aplicações existentes pro dropdown do formulário de resgate
+app.get("/api/aplicacoes", async (req, res) => {
+  try {
+    const aplicacoes = await getAplicacoesParaSelecao();
+    res.json(aplicacoes);
+  } catch (err) {
+    console.error("Erro ao buscar aplicações:", err);
+    res.status(500).json({ erro: "Não foi possível carregar as aplicações." });
+  }
+});
+
+// Registra um resgate
+app.post("/api/resgate", async (req, res) => {
+  try {
+    const { codigoAplicacao, dataResgate, valorResgate } = req.body;
+
+    if (!codigoAplicacao || !dataResgate || !valorResgate) {
+      return res.status(400).json({ erro: "Todos os campos são obrigatórios." });
+    }
+
+    await appendResgate({
+      codigo: uuidv4(),
+      codigoAplicacao,
+      dataResgate,
+      valorResgate,
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Erro ao salvar resgate:", err);
+    res.status(500).json({ erro: "Não foi possível salvar o resgate." });
+  }
+});
+
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
 
 // ---------- Bot do Telegram ----------
@@ -247,7 +281,9 @@ async function enviarMenu(ctx) {
     .row()
     .webApp("🏦 Atualizar FGTS", `${PUBLIC_URL}/miniapp/fgts.html`)
     .row()
-    .webApp("👤 Registrar custódia", `${PUBLIC_URL}/miniapp/custodia.html`);
+    .webApp("👤 Registrar custódia", `${PUBLIC_URL}/miniapp/custodia.html`)
+    .row()
+    .webApp("💵 Registrar resgate", `${PUBLIC_URL}/miniapp/resgate.html`);
   await ctx.reply("O que você quer registrar?", { reply_markup: teclado });
 }
 
