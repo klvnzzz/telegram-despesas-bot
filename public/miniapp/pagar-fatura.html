@@ -216,6 +216,15 @@
   function renderizarLista() {
     resultadoEl.innerHTML = "";
 
+    const acoesEl = document.createElement("div");
+    acoesEl.className = "linha-dupla";
+    acoesEl.style.marginBottom = "8px";
+    acoesEl.innerHTML = `
+      <button type="button" id="btn-marcar-todas" style="background:none; border:1px solid var(--border); color:var(--text); padding:8px; font-size:13px; border-radius:8px;">Selecionar todas</button>
+      <button type="button" id="btn-desmarcar-todas" style="background:none; border:1px solid var(--border); color:var(--text); padding:8px; font-size:13px; border-radius:8px;">Desmarcar todas</button>
+    `;
+    resultadoEl.appendChild(acoesEl);
+
     const listaEl = document.createElement("div");
     despesasEncontradas.forEach((d, i) => {
       const item = document.createElement("div");
@@ -255,6 +264,16 @@
       chk.addEventListener("change", atualizarResumo);
     });
     atualizarResumo();
+
+    document.getElementById("btn-marcar-todas").addEventListener("click", () => {
+      listaEl.querySelectorAll("input[type=checkbox]").forEach((chk) => { chk.checked = true; });
+      atualizarResumo();
+    });
+
+    document.getElementById("btn-desmarcar-todas").addEventListener("click", () => {
+      listaEl.querySelectorAll("input[type=checkbox]").forEach((chk) => { chk.checked = false; });
+      atualizarResumo();
+    });
 
     btnMarcar.addEventListener("click", async () => {
       btnMarcar.disabled = true;
