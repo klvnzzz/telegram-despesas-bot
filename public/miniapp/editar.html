@@ -153,7 +153,7 @@
         { chave: "descricao", rotulo: "Descrição", tipo: "select", lista: "despesas" },
         { chave: "formaPagamento", rotulo: "Forma de pagamento", tipo: "select", lista: "pagamentos" },
         { chave: "valor", rotulo: "Valor", tipo: "moeda" },
-        { chave: "dataReferencia", rotulo: "Data (mês de referência)", tipo: "data" },
+        { chave: "dataReferencia", rotulo: "Data (mês de referência)", tipo: "mesAno" },
         { chave: "status", rotulo: "Status", tipo: "fixo", valores: ["Pago", "Pendente"] },
         { chave: "doQue", rotulo: "Do que?", tipo: "select", lista: "doQue", opcional: true },
         { chave: "observacao", rotulo: "Observação", tipo: "texto" },
@@ -163,7 +163,7 @@
       campos: [
         { chave: "descricao", rotulo: "Descrição", tipo: "select", lista: "receitas" },
         { chave: "valor", rotulo: "Valor", tipo: "moeda" },
-        { chave: "data", rotulo: "Data (mês de referência)", tipo: "data" },
+        { chave: "data", rotulo: "Data (mês de referência)", tipo: "mesAno" },
         { chave: "status", rotulo: "Status", tipo: "fixo", valores: ["Pendente", "Recebido"] },
         { chave: "observacao", rotulo: "Observação", tipo: "texto" },
       ],
@@ -304,6 +304,34 @@
     };
   }
 
+  // Campo só de mês/ano (sem dia) — usado em Despesa e Receita, sempre salva como dia 01
+  function criarCampoMesAno(campo, valorAtual) {
+    const wrapper = document.createElement("div");
+    const [anoAtual, mesAtual] = (valorAtual || "").split("-").map(Number);
+
+    const opcoesMeses = NOMES_MESES.map((nome, i) => `<option value="${i + 1}">${nome}</option>`).join("");
+
+    wrapper.innerHTML = `
+      <label>${campo.rotulo}</label>
+      <div class="campo-data">
+        <select>${opcoesMeses}</select>
+        <input type="number" placeholder="Ano" value="${anoAtual || ""}" />
+      </div>
+    `;
+
+    const [selectMes, inputAno] = wrapper.querySelectorAll("select, input");
+    if (mesAtual) selectMes.value = String(mesAtual);
+
+    return {
+      wrapper,
+      getValor: async () => {
+        const mes = String(selectMes.value).padStart(2, "0");
+        const ano = inputAno.value;
+        return `${ano}-${mes}-01`;
+      },
+    };
+  }
+
   function criarCampoFixo(campo, valorAtual) {
     const wrapper = document.createElement("div");
     const opcoesHtml = campo.valores.map((v) => `<option value="${v}" ${v === valorAtual ? "selected" : ""}>${v}</option>`).join("");
@@ -432,6 +460,7 @@
         if (campo.tipo === "select") handler = criarCampoSelect(campo, valorAtual, opcoes);
         else if (campo.tipo === "moeda") handler = criarCampoMoeda(campo, valorAtual);
         else if (campo.tipo === "data") handler = criarCampoData(campo, valorAtual);
+        else if (campo.tipo === "mesAno") handler = criarCampoMesAno(campo, valorAtual);
         else if (campo.tipo === "fixo") handler = criarCampoFixo(campo, valorAtual);
         else handler = criarCampoTexto(campo, valorAtual);
 
