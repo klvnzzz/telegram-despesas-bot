@@ -153,6 +153,18 @@
 
   const OPCAO_OUTRO = "Outro";
 
+  async function enviarNotificacaoTelegram(mensagem) {
+    const chatId = tg?.initDataUnsafe?.user?.id;
+    if (!chatId) return;
+    try {
+      await fetch("/api/notificar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId, mensagem }),
+      });
+    } catch {}
+  }
+
   let opcoesGlobais = null;
   async function garantirOpcoes() {
     if (!opcoesGlobais) {
@@ -346,6 +358,8 @@
 
     try {
       let salvas = 0;
+      const linhasResumo = [];
+
       for (const bloco of blocos) {
         const { payload, novasOpcoes } = bloco.obterPayload();
 
@@ -369,8 +383,13 @@
           });
         }
 
+        linhasResumo.push(`• ${payload.descricao} — ${payload.instituicao} — R$ ${payload.valorComprado.toFixed(2).replace(".", ",")}`);
+
         salvas++;
       }
+
+      const titulo = salvas > 1 ? `✅ ${salvas} aplicações registradas:` : "✅ Aplicação registrada:";
+      await enviarNotificacaoTelegram(`${titulo}\n\n${linhasResumo.join("\n")}`);
 
       mostrarConfirmacao(salvas > 1 ? `${salvas} aplicações registradas na planilha.` : "Aplicação registrada na planilha.");
       btn.disabled = false;

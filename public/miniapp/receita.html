@@ -155,6 +155,20 @@
 
   const OPCAO_OUTRO = "Outro";
 
+  async function enviarNotificacaoTelegram(mensagem) {
+    const chatId = tg?.initDataUnsafe?.user?.id;
+    if (!chatId) return;
+    try {
+      await fetch("/api/notificar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId, mensagem }),
+      });
+    } catch {}
+  }
+
+  const NOMES_MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
   let opcoesGlobais = null;
   async function garantirOpcoes() {
     if (!opcoesGlobais) {
@@ -345,6 +359,8 @@
 
     try {
       let salvas = 0;
+      const linhasResumo = [];
+
       for (const bloco of blocos) {
         const { payload, novasOpcoes } = bloco.obterPayload();
 
@@ -368,8 +384,14 @@
           });
         }
 
+        const nomeMes = NOMES_MESES[Number(payload.mesReferencia) - 1];
+        linhasResumo.push(`• ${payload.descricao} — R$ ${payload.valor.toFixed(2).replace(".", ",")} (${nomeMes}/${payload.anoReferencia})`);
+
         salvas++;
       }
+
+      const titulo = salvas > 1 ? `✅ ${salvas} receitas registradas:` : "✅ Receita registrada:";
+      await enviarNotificacaoTelegram(`${titulo}\n\n${linhasResumo.join("\n")}`);
 
       mostrarConfirmacao(salvas > 1 ? `${salvas} receitas registradas na planilha.` : "Receita registrada na planilha.");
       btn.disabled = false;

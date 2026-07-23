@@ -141,6 +141,18 @@
     else overlayConfirmacao.classList.remove("ativo");
   });
 
+  async function enviarNotificacaoTelegram(mensagem) {
+    const chatId = tg?.initDataUnsafe?.user?.id;
+    if (!chatId) return;
+    try {
+      await fetch("/api/notificar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId, mensagem }),
+      });
+    } catch {}
+  }
+
   const campoValor = document.getElementById("valorAtualizado");
   function formatarMoeda(digitos) {
     const centavos = parseInt(digitos || "0", 10);
@@ -174,6 +186,8 @@
       });
 
       if (!resp.ok) throw new Error("Falha ao salvar.");
+
+      await enviarNotificacaoTelegram(`✅ FGTS atualizado:\n\nNovo valor: R$ ${payload.valorAtualizado.toFixed(2).replace(".", ",")}`);
 
       mostrarConfirmacao("FGTS atualizado.");
       btn.disabled = false;

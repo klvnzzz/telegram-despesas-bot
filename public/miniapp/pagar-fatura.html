@@ -180,6 +180,18 @@
     else overlayConfirmacao.classList.remove("ativo");
   });
 
+  async function enviarNotificacaoTelegram(mensagem) {
+    const chatId = tg?.initDataUnsafe?.user?.id;
+    if (!chatId) return;
+    try {
+      await fetch("/api/notificar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId, mensagem }),
+      });
+    } catch {}
+  }
+
   // Pré-seleciona o mês e ano atuais
   const hoje = new Date();
   document.getElementById("mes").value = String(hoje.getMonth() + 1);
@@ -295,6 +307,10 @@
           try { const dados = await resp.json(); if (dados.erro) msg = dados.erro; } catch {}
           throw new Error(msg);
         }
+
+        const marcadasInfo = marcados.map((chk) => despesasEncontradas[chk.dataset.indice]);
+        const linhasResumo = marcadasInfo.map((d) => `• ${d.descricao || "Sem descrição"} — R$ ${Number(d.valor || 0).toFixed(2).replace(".", ",")}`);
+        await enviarNotificacaoTelegram(`✅ ${codigos.length} despesa(s) marcada(s) como paga(s):\n\n${linhasResumo.join("\n")}`);
 
         mostrarConfirmacao(`${codigos.length} despesa(s) marcada(s) como paga(s).`);
       } catch (err) {
