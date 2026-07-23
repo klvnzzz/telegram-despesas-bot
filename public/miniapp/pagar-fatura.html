@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Marcar fatura como paga</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1c1c1e;
+    --muted: #6b6b6f;
+    --border: #e2e2e4;
+    --accent: #2f80ed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  input, select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 15px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .linha-dupla { display: flex; gap: 8px; }
+  .linha-dupla > div { flex: 1; }
+  #btn-buscar {
+    width: 100%;
+    margin-top: 16px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    background: none;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+  }
+  .item-despesa {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 6px;
+  }
+  .item-despesa input[type="checkbox"] { width: auto; }
+  .item-despesa .info { flex: 1; font-size: 13px; }
+  .item-despesa .info .desc { font-weight: 500; }
+  .item-despesa .info .detalhe { color: var(--muted); font-size: 12px; }
+  #resumo {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 12px 0;
+    text-align: center;
+  }
+  #btn-marcar {
+    width: 100%;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+  }
+  #btn-marcar:disabled { opacity: 0.5; }
+  .dica-vazia { font-size: 13px; color: var(--muted); text-align: center; padding: 20px 0; }
+  #mensagem { font-size: 13px; margin-top: 10px; text-align: center; }
+  #mensagem.erro { color: #d64545; }
+  .overlay-confirmacao {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  .overlay-confirmacao.ativo { display: flex; }
+  .card-confirmacao {
+    background: #fff;
+    border-radius: 16px;
+    padding: 28px 24px;
+    max-width: 320px;
+    width: 100%;
+    text-align: center;
+  }
+  .icone-sucesso {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #2e9e5b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+  }
+  .icone-sucesso svg { width: 30px; height: 30px; }
+  .card-confirmacao p {
+    font-size: 15px;
+    color: var(--text);
+    margin: 0 0 20px;
+    line-height: 1.4;
+  }
+  #btn-ok-confirmacao {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<h1>Marcar fatura como paga</h1>
+
+<label>Mês de referência</label>
+<div class="linha-dupla">
+  <select id="mes">
+    <option value="1">Janeiro</option>
+    <option value="2">Fevereiro</option>
+    <option value="3">Março</option>
+    <option value="4">Abril</option>
+    <option value="5">Maio</option>
+    <option value="6">Junho</option>
+    <option value="7">Julho</option>
+    <option value="8">Agosto</option>
+    <option value="9">Setembro</option>
+    <option value="10">Outubro</option>
+    <option value="11">Novembro</option>
+    <option value="12">Dezembro</option>
+  </select>
+  <input type="number" id="ano" placeholder="Ano" />
+</div>
+
+<button id="btn-buscar">Buscar despesas pendentes</button>
+
+<div id="resultado"></div>
+
+<div class="overlay-confirmacao" id="overlay-confirmacao">
+  <div class="card-confirmacao">
+    <div class="icone-sucesso">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    </div>
+    <p id="texto-confirmacao"></p>
+    <button id="btn-ok-confirmacao">Ok</button>
+  </div>
+</div>
+
+<script>
+  const tg = window.Telegram?.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  const overlayConfirmacao = document.getElementById("overlay-confirmacao");
+  const textoConfirmacao = document.getElementById("texto-confirmacao");
+
+  function mostrarConfirmacao(texto) {
+    textoConfirmacao.textContent = texto;
+    overlayConfirmacao.classList.add("ativo");
+  }
+
+  document.getElementById("btn-ok-confirmacao").addEventListener("click", () => {
+    if (tg) tg.close();
+    else overlayConfirmacao.classList.remove("ativo");
+  });
+
+  // Pré-seleciona o mês e ano atuais
+  const hoje = new Date();
+  document.getElementById("mes").value = String(hoje.getMonth() + 1);
+  document.getElementById("ano").value = String(hoje.getFullYear());
+
+  function formatarMoeda(numero) {
+    return Number(numero || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  }
+
+  const resultadoEl = document.getElementById("resultado");
+  let despesasEncontradas = [];
+
+  document.getElementById("btn-buscar").addEventListener("click", async () => {
+    const mes = document.getElementById("mes").value;
+    const ano = document.getElementById("ano").value;
+
+    resultadoEl.innerHTML = "<p class='dica-vazia'>Buscando...</p>";
+
+    try {
+      const resp = await fetch(`/api/despesas/pendentes?mes=${mes}&ano=${ano}`);
+      despesasEncontradas = await resp.json();
+
+      if (!despesasEncontradas.length) {
+        resultadoEl.innerHTML = "<p class='dica-vazia'>Nenhuma despesa pendente encontrada nesse mês.</p>";
+        return;
+      }
+
+      renderizarLista();
+    } catch {
+      resultadoEl.innerHTML = "<p class='dica-vazia'>Erro ao buscar despesas.</p>";
+    }
+  });
+
+  function renderizarLista() {
+    resultadoEl.innerHTML = "";
+
+    const listaEl = document.createElement("div");
+    despesasEncontradas.forEach((d, i) => {
+      const item = document.createElement("div");
+      item.className = "item-despesa";
+      item.innerHTML = `
+        <input type="checkbox" checked data-indice="${i}" />
+        <div class="info">
+          <div class="desc">${d.descricao || "Sem descrição"}</div>
+          <div class="detalhe">${formatarMoeda(d.valor)} · ${d.formaPagamento || "sem forma de pagamento"}</div>
+        </div>
+      `;
+      listaEl.appendChild(item);
+    });
+    resultadoEl.appendChild(listaEl);
+
+    const resumoEl = document.createElement("p");
+    resumoEl.id = "resumo";
+    resultadoEl.appendChild(resumoEl);
+
+    const btnMarcar = document.createElement("button");
+    btnMarcar.id = "btn-marcar";
+    resultadoEl.appendChild(btnMarcar);
+
+    const mensagemEl = document.createElement("p");
+    mensagemEl.id = "mensagem";
+    resultadoEl.appendChild(mensagemEl);
+
+    function atualizarResumo() {
+      const marcados = Array.from(listaEl.querySelectorAll("input:checked"));
+      const total = marcados.reduce((soma, chk) => soma + Number(despesasEncontradas[chk.dataset.indice].valor || 0), 0);
+      resumoEl.textContent = `${marcados.length} de ${despesasEncontradas.length} selecionadas — total ${formatarMoeda(total)}`;
+      btnMarcar.textContent = `Marcar ${marcados.length} como paga(s)`;
+      btnMarcar.disabled = marcados.length === 0;
+    }
+
+    listaEl.querySelectorAll("input[type=checkbox]").forEach((chk) => {
+      chk.addEventListener("change", atualizarResumo);
+    });
+    atualizarResumo();
+
+    btnMarcar.addEventListener("click", async () => {
+      btnMarcar.disabled = true;
+      mensagemEl.textContent = "";
+      mensagemEl.className = "";
+
+      const marcados = Array.from(listaEl.querySelectorAll("input:checked"));
+      const codigos = marcados.map((chk) => despesasEncontradas[chk.dataset.indice].codigo);
+
+      try {
+        const resp = await fetch("/api/despesas/marcar-pagas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codigos }),
+        });
+
+        if (!resp.ok) {
+          let msg = "Falha ao marcar as despesas como pagas.";
+          try { const dados = await resp.json(); if (dados.erro) msg = dados.erro; } catch {}
+          throw new Error(msg);
+        }
+
+        mostrarConfirmacao(`${codigos.length} despesa(s) marcada(s) como paga(s).`);
+      } catch (err) {
+        mensagemEl.textContent = err.message || "Erro ao marcar as despesas.";
+        mensagemEl.className = "erro";
+        btnMarcar.disabled = false;
+      }
+    });
+  }
+</script>
+
+</body>
+</html>

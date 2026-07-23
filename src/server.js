@@ -312,6 +312,44 @@ app.put("/api/registros/:aba/:codigo", async (req, res) => {
   }
 });
 
+// Lista as despesas pendentes de um mês/ano específico (pra conferência antes de marcar como pagas)
+app.get("/api/despesas/pendentes", async (req, res) => {
+  try {
+    const { mes, ano } = req.query;
+    if (!mes || !ano) {
+      return res.status(400).json({ erro: "Mês e ano são obrigatórios." });
+    }
+
+    const prefixo = `${ano}-${String(mes).padStart(2, "0")}`;
+    const despesas = await listarRegistros("despesa");
+    const pendentes = despesas.filter((d) => d.status === "Pendente" && String(d.dataReferencia).startsWith(prefixo));
+
+    res.json(pendentes);
+  } catch (err) {
+    console.error("Erro ao buscar despesas pendentes:", err);
+    res.status(500).json({ erro: "Não foi possível carregar as despesas pendentes." });
+  }
+});
+
+// Marca várias despesas como pagas de uma vez (ex: depois de pagar a fatura do cartão)
+app.post("/api/despesas/marcar-pagas", async (req, res) => {
+  try {
+    const { codigos } = req.body;
+    if (!Array.isArray(codigos) || !codigos.length) {
+      return res.status(400).json({ erro: "Selecione ao menos uma despesa." });
+    }
+
+    for (const codigo of codigos) {
+      await atualizarRegistro("despesa", codigo, { status: "Pago" });
+    }
+
+    res.json({ ok: true, quantidade: codigos.length });
+  } catch (err) {
+    console.error("Erro ao marcar despesas como pagas:", err);
+    res.status(500).json({ erro: "Não foi possível marcar as despesas como pagas." });
+  }
+});
+
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
 
 // ---------- Bot do Telegram ----------
@@ -334,6 +372,8 @@ async function enviarMenu(ctx) {
     .webApp("🏦 Atualizar FGTS", `${PUBLIC_URL}/miniapp/fgts.html`)
     .row()
     .webApp("👤 Registrar custódia", `${PUBLIC_URL}/miniapp/custodia.html`)
+    .row()
+    .webApp("💳 Marcar fatura como paga", `${PUBLIC_URL}/miniapp/pagar-fatura.html`)
     .row()
     .webApp("✏️ Editar registro", `${PUBLIC_URL}/miniapp/editar.html`);
   await ctx.reply("O que você quer registrar?", { reply_markup: teclado });
