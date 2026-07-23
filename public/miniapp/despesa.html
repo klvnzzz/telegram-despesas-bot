@@ -154,6 +154,21 @@
   if (tg) { tg.ready(); tg.expand(); }
 
   const OPCAO_OUTRO = "Outro";
+  const NOMES_MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+  async function enviarNotificacaoTelegram(mensagem) {
+    const chatId = tg?.initDataUnsafe?.user?.id;
+    if (!chatId) return; // fora do Telegram (ex: teste no navegador), não tem como notificar
+    try {
+      await fetch("/api/notificar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId, mensagem }),
+      });
+    } catch {
+      // Notificação é um "extra" — se falhar, não bloqueia o fluxo de salvar
+    }
+  }
 
   let opcoesGlobais = null;
   async function garantirOpcoes() {
@@ -396,6 +411,8 @@
 
     try {
       let salvas = 0;
+      const linhasResumo = [];
+
       for (const bloco of blocos) {
         const { payload, novasOpcoes } = bloco.obterPayload();
 
@@ -420,8 +437,15 @@
           });
         }
 
+        const nomeMes = NOMES_MESES[Number(payload.mesReferencia) - 1];
+        const parcelaTexto = Number(payload.parcelas) > 1 ? ` — ${payload.parcelas}x` : "";
+        linhasResumo.push(`• ${payload.descricao} — R$ ${payload.valor.toFixed(2).replace(".", ",")} (${nomeMes}/${payload.anoReferencia})${parcelaTexto}`);
+
         salvas++;
       }
+
+      const titulo = salvas > 1 ? `✅ ${salvas} despesas registradas:` : "✅ Despesa registrada:";
+      await enviarNotificacaoTelegram(`${titulo}\n\n${linhasResumo.join("\n")}`);
 
       mostrarConfirmacao(salvas > 1 ? `${salvas} despesas registradas na planilha.` : "Despesa registrada na planilha.");
       btn.disabled = false;

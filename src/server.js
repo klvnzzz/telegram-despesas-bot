@@ -356,6 +356,22 @@ app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
 
 const bot = new Bot(process.env.BOT_TOKEN);
 
+// Pede pro bot mandar uma mensagem de confirmação no chat do usuário
+// (usado pela mini app depois de salvar registros)
+app.post("/api/notificar", async (req, res) => {
+  try {
+    const { chatId, mensagem } = req.body;
+    if (!chatId || !mensagem) {
+      return res.status(400).json({ erro: "chatId e mensagem são obrigatórios." });
+    }
+    await bot.api.sendMessage(chatId, mensagem);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Erro ao enviar notificação:", err);
+    res.status(500).json({ erro: "Não foi possível enviar a notificação." });
+  }
+});
+
 bot.command("start", (ctx) => enviarMenu(ctx));
 
 // Qualquer mensagem de texto também mostra o menu (fluxo pedido: manda msg -> recebe botão)
