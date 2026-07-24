@@ -214,6 +214,59 @@
     carregarLista();
   });
 
+  async function enviarNotificacaoTelegram(mensagem) {
+    const chatId = tg?.initDataUnsafe?.user?.id;
+    if (!chatId) return;
+    try {
+      await fetch("/api/notificar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId, mensagem }),
+      });
+    } catch {}
+  }
+
+  // Formata um valor de campo pro texto da notificação, conforme o tipo do campo
+  function formatarValorParaExibicao(campo, valor) {
+    if (campo.tipo === "moeda") {
+      const casasDecimais = campo.casasDecimais || 2;
+      return Number(valor || 0).toLocaleString("pt-BR", {
+        style: "currency", currency: "BRL", minimumFractionDigits: casasDecimais, maximumFractionDigits: casasDecimais,
+      });
+    }
+    if (campo.tipo === "mesAno") {
+      const [ano, mes] = String(valor || "").split("-");
+      return ano && mes ? `${NOMES_MESES[Number(mes) - 1]}/${ano}` : (valor || "-");
+    }
+    if (campo.tipo === "data") {
+      const [ano, mes, dia] = String(valor || "").split("-");
+      return ano && mes && dia ? `${dia}/${mes}/${ano}` : (valor || "-");
+    }
+    return valor || "-";
+  }
+
+  function valoresIguais(campo, a, b) {
+    if (campo.tipo === "moeda") return Number(a || 0) === Number(b || 0);
+    return String(a || "") === String(b || "");
+  }
+
+  // Monta um resumo legível do que foi salvo, destacando os campos que mudaram
+  function montarResumoEdicao(payload) {
+    const config = FORM_CONFIGS[abaAtual];
+    const linhas = config.campos.map((campo) => {
+      const novo = payload[campo.chave];
+      const antigo = registroOriginal ? registroOriginal[campo.chave] : undefined;
+      const novoFormatado = formatarValorParaExibicao(campo, novo);
+
+      if (registroOriginal && !valoresIguais(campo, novo, antigo)) {
+        const antigoFormatado = formatarValorParaExibicao(campo, antigo);
+        return `${campo.rotulo}: ${novoFormatado} (era ${antigoFormatado})`;
+      }
+      return `${campo.rotulo}: ${novoFormatado}`;
+    });
+    return linhas.join("\n");
+  }
+
   const OPCAO_OUTRO = "Outro";
 
   // Configuração de campos por aba (reaproveita os padrões dos formulários de criação)
@@ -274,6 +327,7 @@
 
   let abaAtual = null;
   let codigoAtual = null;
+  let registroOriginal = null;
 
   function mostrarEtapa(etapa) {
     etapaAbas.style.display = etapa === "abas" ? "block" : "none";
@@ -518,6 +572,7 @@
         garantirOpcoes(),
       ]);
       const registro = await registroResp.json();
+      registroOriginal = registro;
 
       const config = FORM_CONFIGS[abaAtual];
       camposFormEl.innerHTML = "";
@@ -561,6 +616,9 @@
       });
 
       if (!resp.ok) throw new Error("Falha ao salvar.");
+
+      const nomesAbas = { despesa: "Despesa", receita: "Receita", aplicacao: "Aplicação", custodia: "Custódia" };
+      await enviarNotificacaoTelegram(`✏️ ${nomesAbas[abaAtual]} editada:\n\n${montarResumoEdicao(payload)}`);
 
       mostrarConfirmacao("Alterações salvas.");
       btnSalvar.disabled = false;
