@@ -4,7 +4,7 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
-import { Bot, InlineKeyboard } from "grammy";
+import { Bot, InlineKeyboard, webhookCallback } from "grammy";
 import { getDescricoes, addNovaOpcao, appendDespesa, appendReceita, appendAplicacao, getFgts, upsertFgts, appendCustodia, getAplicacoesParaSelecao, appendResgate, listarRegistros, buscarRegistro, atualizarRegistro, marcarDespesasComoPagas } from "./sheets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -401,5 +401,25 @@ if (!PUBLIC_URL) {
   console.warn("Aviso: PUBLIC_URL não está definida. O botão da mini app não vai funcionar até você configurá-la.");
 }
 
-bot.start();
-console.log("Bot iniciado (long polling).");
+// Caminho "secreto" do webhook (usa o próprio token do bot, que já é secreto,
+// pra dificultar que alguém aleatório mande requisições falsas pra essa rota)
+const CAMINHO_WEBHOOK = `/telegram-webhook/${process.env.BOT_TOKEN}`;
+app.use(CAMINHO_WEBHOOK, webhookCallback(bot, "express"));
+
+// Configura o webhook no Telegram automaticamente sempre que o servidor sobe
+async function configurarWebhook() {
+  if (!PUBLIC_URL) {
+    console.warn("PUBLIC_URL não definida — não foi possível configurar o webhook.");
+    return;
+  }
+  try {
+    await bot.init(); // busca as infos do bot (necessário já que não usamos bot.start())
+    await bot.api.setWebhook(`${PUBLIC_URL}${CAMINHO_WEBHOOK}`);
+    console.log("Webhook do Telegram configurado com sucesso.");
+  } catch (err) {
+    console.error("Erro ao configurar o webhook:", err);
+  }
+}
+
+configurarWebhook();
+console.log("Bot rodando em modo webhook.");
